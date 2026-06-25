@@ -141,3 +141,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Rust / Tauri build output (src-tauri/Cargo.lock IS committed — this is an app)
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*~
