@@ -2,9 +2,12 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { SongThumb } from './SongThumb'
-import { SongActionButton } from './SongActionMenu'
+import { SongActionButton, useSongMenu } from './SongActionMenu'
 import type { BackendSong } from './data'
 import { ACCENT } from './helpers'
+
+// Empty fallback so the hook is always called (rules of hooks) even without a song.
+const EMPTY = { id: '', title: '', artists: [], album: null, duration: null, thumbnail: null } as BackendSong
 
 interface Props {
   hue: number
@@ -21,9 +24,11 @@ interface Props {
 
 export function SongRow({ hue, thumbnail, thumbSize = 40, title, subtitle, trailing, current, playing, onClick, song }: Props) {
   const [hover, setHover] = useState(false)
+  const { onContextMenu, menu } = useSongMenu(song ?? EMPTY)
   return (
     <div
       onClick={onClick}
+      onContextMenu={song ? onContextMenu : undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -39,6 +44,7 @@ export function SongRow({ hue, thumbnail, thumbSize = 40, title, subtitle, trail
       </div>
       {trailing}
       {song && <SongActionButton song={song} visible={hover} />}
+      {menu}
     </div>
   )
 }

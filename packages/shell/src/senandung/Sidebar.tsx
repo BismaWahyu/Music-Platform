@@ -78,6 +78,7 @@ function PlaylistEntry({ pl, active, onOpen, onEdit, onDelete }: { pl: BackendPl
   return (
     <div
       onClick={onOpen}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY }) }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px 8px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.14s', background: hover ? 'rgba(255,255,255,0.04)' : 'transparent', color: active ? ACCENT : '#a4a8af' }}

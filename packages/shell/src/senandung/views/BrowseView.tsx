@@ -4,15 +4,17 @@ import { artistName, hueFromId } from '../data'
 import type { BackendSong } from '../data'
 import { ACCENT, stripe, fmt } from '../helpers'
 import { Hover } from '../Hover'
-import { SongActionButton } from '../SongActionMenu'
+import { SongActionButton, useSongMenu } from '../SongActionMenu'
 import { BrowseCarousel } from '../Browse'
 import { PlayTriangle, EqBars, ChevronLeft } from '../Icons'
 
 function TrackRow({ song, index, current, playing, onClick }: { song: BackendSong; index: number; current: boolean; playing: boolean; onClick: () => void }) {
   const [hover, setHover] = useState(false)
+  const { onContextMenu, menu } = useSongMenu(song)
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{ display: 'grid', gridTemplateColumns: '30px 1fr 56px', alignItems: 'center', gap: '16px', padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.12s', background: hover ? 'rgba(255,255,255,0.045)' : 'transparent' }}
@@ -27,6 +29,7 @@ function TrackRow({ song, index, current, playing, onClick }: { song: BackendSon
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '12.5px', fontFamily: "'JetBrains Mono',monospace", color: '#5d626a' }}>
         {hover ? <SongActionButton song={song} visible /> : (song.duration ? fmt(song.duration) : '—')}
       </div>
+      {menu}
     </div>
   )
 }

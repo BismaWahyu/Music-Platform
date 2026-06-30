@@ -5,7 +5,7 @@ import type { BackendSong } from '../data'
 import { ACCENT } from '../helpers'
 import { Hover } from '../Hover'
 import { SongThumb } from '../SongThumb'
-import { SongActionButton } from '../SongActionMenu'
+import { SongActionButton, useSongMenu } from '../SongActionMenu'
 import { BrowseCarousel } from '../Browse'
 import { PlaylistTile } from '../PlaylistTile'
 import { NavSearch } from '../Icons'
@@ -17,9 +17,11 @@ function greetingText(): string {
 
 function LibraryCard({ song, current, playing, onClick }: { song: BackendSong; current: boolean; playing: boolean; onClick: () => void }) {
   const [hover, setHover] = useState(false)
+  const { onContextMenu, menu } = useSongMenu(song)
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{ display: 'flex', alignItems: 'center', gap: '16px', background: hover ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)', backdropFilter: 'blur(22px) saturate(160%)', WebkitBackdropFilter: 'blur(22px) saturate(160%)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '16px', padding: '12px', cursor: 'pointer', transition: 'background 0.15s' }}
@@ -30,15 +32,18 @@ function LibraryCard({ song, current, playing, onClick }: { song: BackendSong; c
         <div style={{ fontSize: '12.5px', color: '#9398a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }}>{artistName(song)}</div>
       </div>
       <SongActionButton song={song} visible={hover} />
+      {menu}
     </div>
   )
 }
 
 function RecentCard({ song, current, onClick }: { song: BackendSong; current: boolean; onClick: () => void }) {
   const [hover, setHover] = useState(false)
+  const { onContextMenu, menu } = useSongMenu(song)
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{ width: '150px', flex: 'none', cursor: 'pointer', padding: '10px', borderRadius: '14px', background: hover ? 'rgba(255,255,255,0.06)' : 'transparent', transition: 'background 0.15s' }}
@@ -46,6 +51,7 @@ function RecentCard({ song, current, onClick }: { song: BackendSong; current: bo
       <SongThumb hue={hueFromId(song.id)} thumbnail={song.thumbnail ?? undefined} size={130} current={current} hovered={hover} />
       <div style={{ fontSize: '13.5px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: current ? ACCENT : '#e8e9ea', marginTop: '10px' }}>{song.title}</div>
       <div style={{ fontSize: '12px', color: '#9398a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }}>{artistName(song)}</div>
+      {menu}
     </div>
   )
 }

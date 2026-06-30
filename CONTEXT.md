@@ -78,7 +78,9 @@ and the entire active UI lives in `packages/shell/src/senandung/`. (The old unus
   - `SongRow.tsx` — horizontal list row (row-level hover) + embeds `SongActionButton`.
   - `SongActionMenu.tsx` — Spotify-style **"⋯" context menu** (portal dropdown): Add to
     queue / Play next / Add to playlist (+ create new) / **Go to artist/album** (when the
-    song carries those browseIds) / Save-Remove library / Copy link.
+    song carries those browseIds) / Save-Remove library / Copy link. Exports `useSongMenu`
+    so any song row opens it on **right-click**. (The native WebView menu is suppressed
+    globally in `main.tsx` via a `contextmenu` preventDefault — except inputs.)
   - `Browse.tsx` — `BrowseCard` + `BrowseCarousel` (reused by Home feed + browse pages).
   - `Toast.tsx` — transient notification pill (playback errors), driven by `store.toast`.
   - `Slider.tsx` — reusable click+drag slider with a thumb handle (progress + volume).

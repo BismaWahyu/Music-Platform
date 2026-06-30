@@ -122,6 +122,19 @@ function Menu({ song, anchor, onClose }: { song: BackendSong; anchor: { x: numbe
   )
 }
 
+// Open the song action menu from a right-click. Returns the handler to attach to a row's
+// `onContextMenu` and the menu element to render.
+export function useSongMenu(song: BackendSong) {
+  const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
+  const onContextMenu = (e: ReactMouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setCoords({ x: e.clientX, y: e.clientY })
+  }
+  const menu = coords ? createPortal(<Menu song={song} anchor={coords} onClose={() => setCoords(null)} />, document.body) : null
+  return { onContextMenu, menu }
+}
+
 export function SongActionButton({ song, visible }: { song: BackendSong; visible: boolean }) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
