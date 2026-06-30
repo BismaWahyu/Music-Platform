@@ -85,6 +85,55 @@ pub async fn get_radio(video_id: String) -> Result<Vec<Song>, String> {
     client.get_radio(&video_id).await.map_err(|e| e.message)
 }
 
+// ==================== Mini-player window ====================
+
+// Primary-monitor work area (excludes the taskbar), in physical pixels: (left, top, right, bottom).
+#[cfg(windows)]
+fn work_area() -> Option<(i32, i32, i32, i32)> {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETWORKAREA};
+    let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+    let ok = unsafe { SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut r as *mut _ as *mut core::ffi::c_void, 0) };
+    if ok != 0 { Some((r.left, r.top, r.right, r.bottom)) } else { None }
+}
+
+/// Enter compact mini mode: resizable within limits, always-on-top, anchored bottom-right
+/// of the work area (above the taskbar).
+#[tauri::command]
+pub fn enter_mini_mode(app: tauri::AppHandle, width: f64, height: f64) -> Result<(), String> {
+    use tauri::Manager;
+    let win = app.get_webview_window("main").ok_or("Window not found")?;
+    let _ = win.unmaximize();
+    win.set_always_on_top(true).map_err(|e| e.to_string())?;
+    win.set_min_size(Some(tauri::LogicalSize::new(300.0, 340.0))).map_err(|e| e.to_string())?;
+    win.set_max_size(Some(tauri::LogicalSize::new(560.0, 640.0))).map_err(|e| e.to_string())?;
+    win.set_resizable(true).map_err(|e| e.to_string())?;
+    win.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    if let Some((_, _, right, bottom)) = work_area() {
+        let scale = win.scale_factor().unwrap_or(1.0);
+        let w = (width * scale) as i32;
+        let h = (height * scale) as i32;
+        let m = (16.0 * scale) as i32;
+        let _ = win.set_position(tauri::PhysicalPosition::new(right - w - m, bottom - h - m));
+    }
+    Ok(())
+}
+
+/// Restore the full window.
+#[tauri::command]
+pub fn exit_mini_mode(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let win = app.get_webview_window("main").ok_or("Window not found")?;
+    win.set_always_on_top(false).map_err(|e| e.to_string())?;
+    win.set_max_size(None::<tauri::LogicalSize<f64>>).map_err(|e| e.to_string())?;
+    win.set_min_size(Some(tauri::LogicalSize::new(1000.0, 600.0))).map_err(|e| e.to_string())?;
+    win.set_resizable(true).map_err(|e| e.to_string())?;
+    win.set_size(tauri::LogicalSize::new(1400.0, 900.0)).map_err(|e| e.to_string())?;
+    let _ = win.center();
+    Ok(())
+}
+
 // ==================== Spotify import ====================
 
 #[tauri::command]

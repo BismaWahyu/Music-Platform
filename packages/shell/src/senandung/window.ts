@@ -32,30 +32,31 @@ export async function onWindowResized(cb: () => void): Promise<() => void> {
   try { return await (await appWindow()).onResized(() => cb()) } catch { return () => {} }
 }
 
-// ---- PiP-style mini mode: a compact, always-on-top window. ----
-const NORMAL_SIZE = { width: 1400, height: 900 }
-const MINI_SIZE = { width: 400, height: 150 }
+// ---- PiP-style mini mode: a compact, resizable, always-on-top window. ----
+// Enter/exit + size/position/limits are handled in Rust (it can read the taskbar-aware
+// work area). The default mini size below must fit the MiniPlayer card.
+const MINI_SIZE = { width: 380, height: 412 }
+
+async function invokeCmd(cmd: string, args?: Record<string, unknown>) {
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke(cmd, args)
+}
 
 export async function enterMiniWindow() {
   if (!inTauri) return
-  try {
-    const { LogicalSize } = await import('@tauri-apps/api/dpi')
-    const w = await appWindow()
-    if (await w.isMaximized()) await w.unmaximize()
-    await w.setResizable(false)
-    await w.setAlwaysOnTop(true)
-    await w.setSize(new LogicalSize(MINI_SIZE.width, MINI_SIZE.height))
-  } catch (e) { console.error(e) }
+  try { await invokeCmd('enter_mini_mode', { width: MINI_SIZE.width, height: MINI_SIZE.height }) } catch (e) { console.error(e) }
 }
 
 export async function exitMiniWindow() {
   if (!inTauri) return
+  try { await invokeCmd('exit_mini_mode') } catch (e) { console.error(e) }
+}
+
+/** Start an interactive window resize from a mini-player edge/corner handle. */
+export async function startResize(direction: string) {
+  if (!inTauri) return
   try {
-    const { LogicalSize } = await import('@tauri-apps/api/dpi')
     const w = await appWindow()
-    await w.setAlwaysOnTop(false)
-    await w.setResizable(true)
-    await w.setSize(new LogicalSize(NORMAL_SIZE.width, NORMAL_SIZE.height))
-    await w.center()
+    await (w.startResizeDragging as (d: string) => Promise<void>)(direction)
   } catch (e) { console.error(e) }
 }

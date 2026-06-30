@@ -137,7 +137,14 @@ and the entire active UI lives in `packages/shell/src/senandung/`. (The old unus
 - `db/schema.rs` — SQLite layer (see §8).
 - `capabilities/default.json` — Tauri v2 permissions for the custom title bar
   (window minimize/maximize/toggle/close/start-dragging) + events + shell.
-- `tauri.conf.json` — window: `decorations: false`, 1400×900, min 1000×600, centered.
+- `tauri.conf.json` — window: `decorations: false`, **`transparent: true`**, `dragDropEnabled:
+  false`, 1400×900, min 1000×600, centered. `main.rs` calls DWM to **round the window corners**
+  (Windows 11) so the transparent mini-player has no square corner gaps (needs `windows-sys`).
+  The MiniPlayer fills the window (card radius ~8px to match the DWM rounding). Mini mode is
+  driven by Rust commands `enter_mini_mode(width,height)` / `exit_mini_mode`: resizable with
+  min/max limits, always-on-top, anchored **bottom-right of the taskbar-aware work area**
+  (`SystemParametersInfoW(SPI_GETWORKAREA)`). The MiniPlayer has edge/corner **resize handles**
+  (`startResizeDragging`, since the window is borderless) and a responsive cover.
 
 ### Design reference (in repo root of MusicPlatform)
 - `Senandung.html` — the original **bundled Claude artifact** (the design source of truth).

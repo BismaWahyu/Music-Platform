@@ -233,7 +233,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   volume: 0.7,
   shuffle: false,
   repeat: 'off',
-  queueOpen: true,
+  queueOpen: false,
   miniMode: false,
   query: '',
   liked: {},

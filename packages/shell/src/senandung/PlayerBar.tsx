@@ -52,7 +52,7 @@ export function PlayerBar() {
 
       {/* Right: lyrics, queue, volume, mini */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '16px' }}>
-        <Hover onClick={() => s.setView('lyrics')} title="Lirik" style={{ cursor: 'pointer', color: s.view === 'lyrics' ? ACCENT : '#9398a0' }} hover={{ color: '#e8e9ea' }}><Lyrics size={18} /></Hover>
+        {hasCurrent && <Hover onClick={() => s.setView('lyrics')} title="Lirik" style={{ cursor: 'pointer', color: s.view === 'lyrics' ? ACCENT : '#9398a0' }} hover={{ color: '#e8e9ea' }}><Lyrics size={18} /></Hover>}
         <Hover onClick={s.toggleQueue} title="Antrean" style={{ cursor: 'pointer', color: s.queueOpen ? ACCENT : '#9398a0' }} hover={{ color: '#e8e9ea' }}><QueueList size={18} /></Hover>
         <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }} title={`Volume ${Math.round(s.volume * 100)}%`}>
           <Volume size={17} />

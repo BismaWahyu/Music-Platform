@@ -1,6 +1,25 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Ask Windows 11's DWM to round the window corners. Needed because the window is
+// borderless + transparent, which otherwise has square corners (showing gaps behind the
+// rounded mini-player card).
+#[cfg(windows)]
+fn round_window_corners(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+    if let Ok(hwnd) = window.hwnd() {
+        let pref: i32 = DWMWCP_ROUND;
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                hwnd.0 as _,
+                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                &pref as *const i32 as *const core::ffi::c_void,
+                core::mem::size_of::<i32>() as u32,
+            );
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -20,6 +39,8 @@ fn main() {
             music_platform::commands::get_radio,
             music_platform::commands::import_spotify_playlist,
             music_platform::commands::import_csv_playlist,
+            music_platform::commands::enter_mini_mode,
+            music_platform::commands::exit_mini_mode,
             // Playback Controls
             music_platform::commands::play,
             music_platform::commands::pause,
@@ -74,6 +95,12 @@ fn main() {
                     music_platform::audio::player::init_audio_engine(app_handle.clone());
                     music_platform::audio::player::start_event_emitter(app_handle);
                 });
+            }
+
+            // Round the (borderless, transparent) window corners on Windows 11.
+            #[cfg(windows)]
+            if let Some(win) = app.get_webview_window("main") {
+                round_window_corners(&win);
             }
             Ok(())
         })
