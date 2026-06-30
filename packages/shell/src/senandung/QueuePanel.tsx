@@ -1,34 +1,65 @@
 import { useState } from 'react'
 import { useSenandung } from './store'
 import { getTrack } from './data'
+import type { BackendSong } from './data'
 import { ACCENT } from './helpers'
 import { Hover } from './Hover'
 import { SongThumb } from './SongThumb'
 import { SongRow } from './SongRow'
 import { WinClose } from './Icons'
 
+const label = {
+  fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase' as const,
+  color: '#54585f', fontFamily: "'JetBrains Mono',monospace",
+}
+
+// A draggable list of songs (used for both the user queue and the context queue). `onMove`
+// reorders by index within this list; `onPlay` plays the clicked song.
+function DraggableList({ songs, onPlay, onMove }: { songs: BackendSong[]; onPlay: (i: number) => void; onMove: (from: number, to: number) => void }) {
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [overIdx, setOverIdx] = useState<number | null>(null)
+  return (
+    <>
+      {songs.map((song, i) => {
+        const t = getTrack(song.id)
+        const dragging = dragIdx === i
+        return (
+          <div
+            key={`${song.id}-${i}`}
+            draggable
+            onDragStart={(e) => { setDragIdx(i); e.dataTransfer.effectAllowed = 'move' }}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overIdx !== i) setOverIdx(i) }}
+            onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) onMove(dragIdx, i); setDragIdx(null); setOverIdx(null) }}
+            onDragEnd={() => { setDragIdx(null); setOverIdx(null) }}
+            style={{ cursor: 'grab', opacity: dragging ? 0.4 : 1, borderTop: overIdx === i && dragIdx !== null && !dragging ? `2px solid ${ACCENT}` : '2px solid transparent' }}
+          >
+            <SongRow hue={t.hue} thumbnail={t.thumbnail} title={t.title} subtitle={t.artist} onClick={() => onPlay(i)} song={song} />
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 export function QueuePanel() {
   const current = useSenandung((s) => s.current)
   const currentId = useSenandung((s) => s.currentId)
   const isPlaying = useSenandung((s) => s.isPlaying)
   const queue = useSenandung((s) => s.queue)
+  const ctxId = useSenandung((s) => s.ctxId)
+  const contextLabel = useSenandung((s) => s.contextLabel)
+  const userQueue = useSenandung((s) => s.userQueue)
   const toggleQueue = useSenandung((s) => s.toggleQueue)
   const playSong = useSenandung((s) => s.playSong)
+  const playUserQueueAt = useSenandung((s) => s.playUserQueueAt)
+  const reorderUserQueue = useSenandung((s) => s.reorderUserQueue)
   const reorderQueue = useSenandung((s) => s.reorderQueue)
+  const clearUserQueue = useSenandung((s) => s.clearUserQueue)
 
-  // Drag-to-reorder: track the dragged row and the row it's hovering over (absolute
-  // queue indices). The drop indicator renders above `overIdx`.
-  const [dragIdx, setDragIdx] = useState<number | null>(null)
-  const [overIdx, setOverIdx] = useState<number | null>(null)
-
-  const qi = queue.findIndex((x) => x.id === currentId)
-  const upcoming = qi >= 0 ? queue.slice(qi + 1) : []
+  // "Next from <context>" = the context songs after the anchor.
+  const ci = queue.findIndex((x) => x.id === ctxId)
+  const upcoming = ci >= 0 ? queue.slice(ci + 1) : []
   const cur = getTrack(currentId)
-
-  const label = {
-    fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase' as const,
-    color: '#54585f', fontFamily: "'JetBrains Mono',monospace",
-  }
 
   return (
     <div style={{ width: '320px', flex: 'none', background: 'rgba(18,20,26,0.42)', backdropFilter: 'blur(44px) saturate(185%)', WebkitBackdropFilter: 'blur(44px) saturate(185%)', borderLeft: '1px solid rgba(255,255,255,0.09)', display: 'flex', flexDirection: 'column' }}>
@@ -36,6 +67,7 @@ export function QueuePanel() {
         <span style={{ fontSize: '15px', fontWeight: 600 }}>Antrean</span>
         <Hover onClick={toggleQueue} style={{ color: '#9398a0', cursor: 'pointer', lineHeight: 0 }} hover={{ color: '#e8e9ea' }}><WinClose size={15} /></Hover>
       </div>
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 16px' }}>
         {current ? (
           <>
@@ -52,38 +84,23 @@ export function QueuePanel() {
           <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Tidak ada yang diputar.</div>
         )}
 
-        <div style={{ ...label, padding: '18px 8px 10px' }}>Selanjutnya</div>
+        {userQueue.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 8px 10px' }}>
+              <span style={label}>Selanjutnya di antrean</span>
+              <Hover onClick={clearUserQueue} style={{ fontSize: '11px', color: '#9398a0', cursor: 'pointer' }} hover={{ color: '#e8e9ea' }}>Bersihkan</Hover>
+            </div>
+            <DraggableList songs={userQueue} onPlay={(i) => playUserQueueAt(i)} onMove={reorderUserQueue} />
+          </>
+        )}
+
+        {current && (
+          <div style={{ ...label, padding: '18px 8px 10px' }}>{contextLabel ? `Selanjutnya dari: ${contextLabel}` : 'Selanjutnya'}</div>
+        )}
         {upcoming.length > 0 ? (
-          upcoming.map((song, i) => {
-            const t = getTrack(song.id)
-            const abs = qi + 1 + i
-            const dragging = dragIdx === abs
-            return (
-              <div
-                key={`${song.id}-${i}`}
-                draggable
-                onDragStart={(e) => { setDragIdx(abs); e.dataTransfer.effectAllowed = 'move' }}
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overIdx !== abs) setOverIdx(abs) }}
-                onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) reorderQueue(dragIdx, abs); setDragIdx(null); setOverIdx(null) }}
-                onDragEnd={() => { setDragIdx(null); setOverIdx(null) }}
-                style={{
-                  cursor: 'grab', opacity: dragging ? 0.4 : 1,
-                  borderTop: overIdx === abs && dragIdx !== null && !dragging ? `2px solid ${ACCENT}` : '2px solid transparent',
-                }}
-              >
-                <SongRow
-                  hue={t.hue}
-                  thumbnail={t.thumbnail}
-                  title={t.title}
-                  subtitle={t.artist}
-                  onClick={() => void playSong(song)}
-                  song={song}
-                />
-              </div>
-            )
-          })
+          <DraggableList songs={upcoming} onPlay={(i) => void playSong(upcoming[i])} onMove={(from, to) => reorderQueue(ci + 1 + from, ci + 1 + to)} />
         ) : (
-          <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Antrean kosong.</div>
+          current && userQueue.length === 0 && <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Antrean kosong.</div>
         )}
       </div>
     </div>

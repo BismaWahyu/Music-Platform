@@ -164,7 +164,16 @@ decode fails; `handlePlaybackError` shows a toast and skips to the next track, w
 `_failStreak` guard (reset once a track actually produces audio) so an all-failing queue
 doesn't loop. A null stream URL takes the same path.
 
-**Queue order**: `queue` is the *active* play order and `queueOriginal` is the canonical
+**Manual queue (Spotify-style)**: `userQueue` is a separate FIFO of manually-added songs
+("Add to queue" / "Play next") that plays BEFORE the context resumes — shown as "Selanjutnya
+di antrean" with a clear button; isolated from shuffle/repeat/radio. The **context** is
+`queue` + `ctxId` (the anchor song id in `queue` — context ops use `ctxId`, not `currentId`,
+since `currentId` can be a userQueue song). `contextLabel` (`contextLabelOf`) drives
+"Selanjutnya dari: <X>". `next`/`autoAdvance` play `userQueue[0]` first, else advance the
+context; `_playTrack` is the low-level play (no queue/context mutation). `playUserQueueAt`,
+`clearUserQueue`, `reorderUserQueue` manage the manual queue.
+
+**Queue order**: `queue` is the *active* context play order and `queueOriginal` is the canonical
 one. Shuffle (Spotify-style) **reorders the queue**: `setShuffle(true)` shuffles the
 upcoming tracks (current pinned to the front via `buildShuffled`); `setShuffle(false)`
 restores `queueOriginal`. `playSong(song, list)` with a `list` starts a NEW context (sets

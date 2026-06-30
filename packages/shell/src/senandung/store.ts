@@ -32,9 +32,12 @@ interface SenandungState {
   detail: DetailRef | null
   current: BackendSong | null
   currentId: string
-  queue: BackendSong[]          // active play order (shuffled when shuffle is on)
+  queue: BackendSong[]          // context play order (shuffled when shuffle is on)
   queueOriginal: BackendSong[]  // canonical order, used to restore when shuffle turns off
   radioPool: BackendSong[]      // internal: prefetched radio songs for the repeat-all window
+  userQueue: BackendSong[]      // manual "Next in queue" — plays before the context continues
+  ctxId: string                 // context anchor (a song id in `queue`); where context resumes
+  contextLabel: string          // label for "Next from: <X>"
   isPlaying: boolean
   progress: number
   volume: number
@@ -103,6 +106,10 @@ interface SenandungState {
   enqueueNext: (song: BackendSong) => void
   enqueueLast: (song: BackendSong) => void
   reorderQueue: (from: number, to: number) => void
+  clearUserQueue: () => void
+  playUserQueueAt: (index: number) => void
+  reorderUserQueue: (from: number, to: number) => void
+  _playTrack: (song: BackendSong) => Promise<void>
   addSongToPlaylist: (playlistId: string, song: BackendSong) => Promise<void>
   createPlaylistAndAdd: (name: string, song: BackendSong) => Promise<void>
   updatePlaylist: (id: string, name: string, description: string) => Promise<void>
@@ -168,15 +175,24 @@ function browseItemToSong(item: BrowseItem): BackendSong {
   }
 }
 
-// Decide which song plays after the current one. The queue is already in play order
-// (pre-shuffled when shuffle is on), so this is a plain sequential walk. `auto` means
-// the current track ended on its own (respects repeat: stop at the end when off, replay
-// when 'one'); a manual skip always navigates and wraps around. null = stop playback.
+// A human label for the current play context (shown as "Next from: <X>" in the queue).
+function contextLabelOf(s: SenandungState): string {
+  if (s.view === 'detail' && s.detailPlaylist) return s.detailPlaylist.name
+  if (s.view === 'browse' && s.browsePage) return s.browsePage.title
+  if (s.view === 'search') return 'Hasil pencarian'
+  if (s.view === 'liked') return 'Lagu Disukai'
+  if (s.view === 'library') return 'Pustaka'
+  return ''
+}
+
+// Decide which CONTEXT song plays after the anchor (`ctxId`). The manual user queue is
+// handled separately by the callers (it plays first). `auto` = the current track ended on
+// its own (respects repeat: stop at end when off, replay when 'one'); a manual skip wraps.
 function pickNext(s: SenandungState, auto: boolean): BackendSong | null {
   const q = s.queue
   if (!q.length) return null
-  if (auto && s.repeat === 'one') return s.current ?? q[0]
-  const i = q.findIndex((x) => x.id === s.currentId)
+  if (auto && s.repeat === 'one') return q.find((x) => x.id === s.ctxId) ?? q[0]
+  const i = q.findIndex((x) => x.id === s.ctxId)
   if (i < 0) return q[0]
   if (i + 1 < q.length) return q[i + 1]
   // Reached the end of the queue.
@@ -194,6 +210,9 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   queue: [],
   queueOriginal: [],
   radioPool: [],
+  userQueue: [],
+  ctxId: '',
+  contextLabel: '',
   isPlaying: false,
   progress: 0,
   volume: 0.7,
@@ -244,19 +263,10 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     set({ detailPlaylist: pl })
   },
 
-  // Play a song. Passing `list` starts a NEW play context (a click in a view/playlist):
-  // it becomes the canonical order, shuffled into the queue if shuffle is on. Internal
-  // navigation (next/prev/autoAdvance, queue clicks) passes no list and keeps the queue.
-  playSong: async (song, list) => {
+  // Low-level: actually play a track (set current + resolve stream + backend play).
+  // Does NOT touch queue/context/userQueue.
+  _playTrack: async (song) => {
     registerSong(song)
-    if (list && list.length) {
-      list.forEach(registerSong)
-      const active = get().shuffle ? buildShuffled(list, song.id) : list
-      set({ queueOriginal: list, queue: active, radioPool: [] }) // new context → fresh radio pool
-    } else if (!get().queue.some((x) => x.id === song.id)) {
-      // Defensive: a loose song with no matching queue becomes its own context.
-      set({ queueOriginal: [song], queue: [song] })
-    }
     set({ current: song, currentId: song.id, progress: 0, isPlaying: true })
     if (!inTauri) return
     set({ realMode: true })
@@ -274,23 +284,55 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     }
   },
 
+  // Play a song. Passing `list` starts a NEW context (a click in a view/playlist): it
+  // becomes the canonical order (shuffled into the queue if shuffle is on) and the anchor.
+  // No list = play a song already in the context (jump within it).
+  playSong: async (song, list) => {
+    registerSong(song)
+    if (list && list.length) {
+      list.forEach(registerSong)
+      const active = get().shuffle ? buildShuffled(list, song.id) : list
+      set({ queueOriginal: list, queue: active, radioPool: [], ctxId: song.id, contextLabel: contextLabelOf(get()) })
+    } else if (get().queue.some((x) => x.id === song.id)) {
+      set({ ctxId: song.id }) // jump within the current context
+    } else {
+      set({ queueOriginal: [song], queue: [song], ctxId: song.id, contextLabel: contextLabelOf(get()) })
+    }
+    await get()._playTrack(song)
+  },
+
   next: () => {
-    const target = pickNext(get(), false)
-    if (target) void get().playSong(target)
+    const s = get()
+    // The manual queue plays before the context continues.
+    if (s.userQueue.length) {
+      const song = s.userQueue[0]
+      set({ userQueue: s.userQueue.slice(1) })
+      void get()._playTrack(song)
+      return
+    }
+    const target = pickNext(s, false)
+    if (target) { set({ ctxId: target.id }); void get()._playTrack(target) }
     void get().topUpQueue() // advancing consumed a track → keep the queue flowing
   },
 
   // Called when the backend reports the current track finished.
   autoAdvance: async () => {
+    const s = get()
+    if (s.userQueue.length) {
+      const song = s.userQueue[0]
+      set({ userQueue: s.userQueue.slice(1) })
+      void get()._playTrack(song)
+      return
+    }
     let target = pickNext(get(), true)
     if (!target) {
-      // End of queue → extend with autoplay (radio) so playback keeps flowing.
+      // End of context → extend with autoplay (radio) so playback keeps flowing.
       await get().topUpQueue(true)
       target = pickNext(get(), true)
       // Radio gave nothing → loop (repeat=all) or stop (repeat=off).
       if (!target && get().repeat === 'all' && get().queue.length) target = get().queue[0]
     }
-    if (target) void get().playSong(target)
+    if (target) { set({ ctxId: target.id }); void get()._playTrack(target) }
     else set({ isPlaying: false, progress: 0 })
     void get().topUpQueue() // refill the tail for the next advance
   },
@@ -299,9 +341,10 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     const s = get()
     if (s.progress > 3) { get().setProgress(0); return }
     if (!s.queue.length) return
-    const i = s.queue.findIndex((x) => x.id === s.currentId)
+    const i = s.queue.findIndex((x) => x.id === s.ctxId)
     const j = (i - 1 + s.queue.length) % s.queue.length
-    void get().playSong(s.queue[j])
+    set({ ctxId: s.queue[j].id })
+    void get()._playTrack(s.queue[j])
   },
 
   setProgress: (p) => {
@@ -405,13 +448,14 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   //  - repeat off/one → autoplay only near the end (top up when ≤5 remain).
   topUpQueue: async (force = false) => {
     const s = get()
-    if (!s.currentId) return
+    const seed = s.ctxId || s.currentId
+    if (!seed) return
 
     if (s.repeat === 'all') {
       // Refill the prefetched radio pool when it's low (avoids a network call per advance).
       let pool = s.radioPool
       if (pool.length < 8) {
-        const radio = await getRadio(s.currentId)
+        const radio = await getRadio(seed)
         const have = new Set([...s.queue.map((x) => x.id), ...pool.map((x) => x.id)])
         const fresh = radio.filter((r) => !have.has(r.id))
         fresh.forEach(registerSong)
@@ -419,7 +463,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       }
       set((st) => {
         let q = [...st.queue]
-        const ci = q.findIndex((x) => x.id === st.currentId)
+        const ci = q.findIndex((x) => x.id === st.ctxId)
         if (ci > 0) q = q.slice(ci)                // drop already-played tracks from the top
         if (q.length - 1 > 49) q = q.slice(0, 50)  // cap upcoming (drops the long playlist tail)
         let newPool = pool
@@ -435,10 +479,10 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     }
 
     // repeat off / one: only top up when the queue is genuinely running low.
-    const idx = s.queue.findIndex((x) => x.id === s.currentId)
+    const idx = s.queue.findIndex((x) => x.id === seed)
     const upcoming = idx >= 0 ? s.queue.length - 1 - idx : 0
     if (!force && upcoming > 5) return
-    const radio = await getRadio(s.currentId)
+    const radio = await getRadio(seed)
     if (!radio.length) return
     const existing = new Set(s.queue.map((x) => x.id))
     const fresh = radio.filter((r) => !existing.has(r.id))
@@ -447,7 +491,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     set((st) => {
       let q = [...st.queue, ...fresh]
       if (q.length > 50) {
-        const cur = q.findIndex((x) => x.id === st.currentId)
+        const cur = q.findIndex((x) => x.id === st.ctxId)
         const trim = Math.min(q.length - 50, Math.max(0, cur))
         q = q.slice(trim)
       }
@@ -510,7 +554,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   setShuffle: (on) => set((s) => {
     if (on === s.shuffle) return {}
     if (!s.queue.length) return { shuffle: on }
-    if (on) return { shuffle: true, queue: buildShuffled(s.queue, s.currentId) }
+    if (on) return { shuffle: true, queue: buildShuffled(s.queue, s.ctxId) }
     return { shuffle: false, queue: s.queueOriginal.length ? s.queueOriginal : s.queue }
   }),
   toggleRepeat: () => set((s) => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
@@ -541,26 +585,37 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   // Import a playlist from a CSV (e.g. an Exportify export) — gets the full track list.
   importCsv: async (name, content) => runImport(get, set, () => importCsvPlaylist(name, content), 'Gagal mengimpor CSV.'),
 
-  // Insert right after the currently-playing track (in both the active and original
-  // orders, so the song survives a shuffle toggle).
+  // "Play next" → front of the manual queue. "Add to queue" → end of it. The manual queue
+  // plays before the context resumes and is shown as "Next in queue".
   enqueueNext: (song) => {
     registerSong(song)
-    set((s) => {
-      const insertAfterCurrent = (arr: BackendSong[]) => {
-        const a = [...arr]
-        const i = a.findIndex((x) => x.id === s.currentId)
-        a.splice(i >= 0 ? i + 1 : a.length, 0, song)
-        return a
-      }
-      return { queue: insertAfterCurrent(s.queue), queueOriginal: insertAfterCurrent(s.queueOriginal) }
-    })
+    set((s) => ({ userQueue: [song, ...s.userQueue] }))
   },
   enqueueLast: (song) => {
     registerSong(song)
-    set((s) => ({ queue: [...s.queue, song], queueOriginal: [...s.queueOriginal, song] }))
+    set((s) => ({ userQueue: [...s.userQueue, song] }))
   },
 
-  // Move a queue entry (absolute indices) — used by drag-to-reorder in the QueuePanel.
+  clearUserQueue: () => set({ userQueue: [] }),
+
+  // Click a song in "Next in queue": play it and drop it + everything before it.
+  playUserQueueAt: (index) => {
+    const s = get()
+    const song = s.userQueue[index]
+    if (!song) return
+    set({ userQueue: s.userQueue.slice(index + 1) })
+    void get()._playTrack(song)
+  },
+
+  reorderUserQueue: (from, to) => set((s) => {
+    if (from === to || from < 0 || to < 0 || from >= s.userQueue.length || to >= s.userQueue.length) return {}
+    const q = [...s.userQueue]
+    const [moved] = q.splice(from, 1)
+    q.splice(to, 0, moved)
+    return { userQueue: q }
+  }),
+
+  // Move a context-queue entry (absolute indices) — drag-to-reorder in the QueuePanel.
   reorderQueue: (from, to) => set((s) => {
     if (from === to || from < 0 || to < 0 || from >= s.queue.length || to >= s.queue.length) return {}
     const q = [...s.queue]
