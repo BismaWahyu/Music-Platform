@@ -7,6 +7,7 @@ import { Hover } from '../Hover'
 import { SongThumb } from '../SongThumb'
 import { SongActionButton } from '../SongActionMenu'
 import { BrowseCarousel } from '../Browse'
+import { PlaylistTile } from '../PlaylistTile'
 import { NavSearch } from '../Icons'
 
 function greetingText(): string {
@@ -53,14 +54,26 @@ export function HomeView() {
   const library = useSenandung((s) => s.library)
   const history = useSenandung((s) => s.history)
   const home = useSenandung((s) => s.home)
+  const playlists = useSenandung((s) => s.playlists)
   const currentId = useSenandung((s) => s.currentId)
   const isPlaying = useSenandung((s) => s.isPlaying)
   const playSong = useSenandung((s) => s.playSong)
+  const openPlaylist = useSenandung((s) => s.openPlaylist)
   const setView = useSenandung((s) => s.setView)
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '34px 42px 48px' }}>
       <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 22px' }}>{greetingText()}</h1>
+
+      {playlists.length > 0 && (
+        <div style={{ marginBottom: '34px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: '10px' }}>
+            {playlists.slice(0, 6).map((pl) => (
+              <PlaylistTile key={pl.id} pl={pl} onClick={() => void openPlaylist(pl.id)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {history.length > 0 && (
         <div style={{ marginBottom: '34px' }}>
@@ -80,7 +93,7 @@ export function HomeView() {
 
       {home.map((section, i) => <BrowseCarousel key={`${section.title}-${i}`} section={section} />)}
 
-      {library.length === 0 && history.length === 0 && home.length === 0 && (
+      {library.length === 0 && history.length === 0 && home.length === 0 && playlists.length === 0 && (
         <div style={{ marginTop: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', color: '#9398a0' }}>
           <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9398a0' }}>
             <NavSearch />

@@ -53,6 +53,15 @@ pub struct BrowsePage {
     pub sections: Vec<BrowseSection>,
 }
 
+/// A mood/genre chip from the "Moods & genres" page; `params` is required when browsing it.
+#[derive(Debug, Clone, Serialize)]
+pub struct MoodCategory {
+    pub title: String,
+    pub browse_id: String,
+    pub params: Option<String>,
+    pub color: Option<String>, // "#RRGGBB"
+}
+
 // Visitor data is fetched once from the YouTube Music homepage and cached for the
 // process lifetime, mirroring how core supplies a real X-Goog-Visitor-Id.
 static VISITOR_DATA: OnceCell<String> = OnceCell::const_new();
@@ -365,6 +374,8 @@ struct WatchEndpoint {
 #[serde(rename_all = "camelCase")]
 struct BrowseEndpoint {
     browse_id: String,
+    #[serde(default)]
+    params: Option<String>,
     browse_endpoint_context_supported_configs: Option<BrowseCtxConfigs>,
 }
 
@@ -470,6 +481,40 @@ struct BrowseSectionItem {
     music_immersive_carousel_shelf_renderer: Option<CarouselShelf>,
     music_shelf_renderer: Option<MusicShelf>,
     music_playlist_shelf_renderer: Option<MusicShelf>,
+    grid_renderer: Option<GridRenderer>,
+}
+
+// Moods & genres page: a grid of navigation buttons.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GridRenderer {
+    items: Option<Vec<GridItem>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GridItem {
+    music_navigation_button_renderer: Option<NavButton>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NavButton {
+    button_text: Option<Text>,
+    solid: Option<Solid>,
+    click_command: Option<ClickCommand>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Solid {
+    left_stripe_color: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClickCommand {
+    browse_endpoint: Option<BrowseEndpoint>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -531,6 +576,103 @@ struct HeaderRenderer {
 struct HeaderThumbnail {
     music_thumbnail_renderer: Option<MusicThumbnail>,
     cropped_square_thumbnail_renderer: Option<MusicThumbnail>,
+}
+
+// ==================== `next` (radio / autoplay queue) models ====================
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextResponse {
+    contents: Option<NextContents>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextContents {
+    single_column_music_watch_next_results_renderer: Option<SingleColumnNext>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SingleColumnNext {
+    tabbed_renderer: Option<TabbedRenderer>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TabbedRenderer {
+    watch_next_tabbed_results_renderer: Option<WatchNextTabbed>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WatchNextTabbed {
+    tabs: Option<Vec<NextTab>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextTab {
+    tab_renderer: Option<NextTabRenderer>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextTabRenderer {
+    content: Option<NextTabContent>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextTabContent {
+    music_queue_renderer: Option<MusicQueue>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MusicQueue {
+    content: Option<MusicQueueContent>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MusicQueueContent {
+    playlist_panel_renderer: Option<PlaylistPanel>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistPanel {
+    contents: Option<Vec<PlaylistPanelItem>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistPanelItem {
+    playlist_panel_video_renderer: Option<PanelVideo>,
+    playlist_panel_video_wrapper_renderer: Option<PanelWrapper>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PanelWrapper {
+    primary_renderer: Option<PanelPrimary>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PanelPrimary {
+    playlist_panel_video_renderer: Option<PanelVideo>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PanelVideo {
+    video_id: Option<String>,
+    title: Option<Text>,
+    long_byline_text: Option<Text>,
+    length_text: Option<Text>,
+    thumbnail: Option<ThumbnailData>,
 }
 
 // ==================== Client ====================
@@ -616,16 +758,57 @@ impl YouTubeClient {
 
     /// POST a `browse` request (WEB_REMIX) and parse the JSON response.
     async fn browse(&self, browse_id: &str) -> Result<BrowseResponse> {
+        self.browse_params(browse_id, None).await
+    }
+
+    async fn browse_params(&self, browse_id: &str, params: Option<&str>) -> Result<BrowseResponse> {
         let visitor = cached_visitor_data(&self.client).await;
-        let body = json!({
+        let mut body = json!({
             "context": { "client": self.context(&WEB_REMIX, &visitor) },
             "browseId": browse_id,
         });
+        if let Some(p) = params {
+            body["params"] = json!(p);
+        }
         let response = self.post("browse", &WEB_REMIX, &visitor, &body).await?;
         response.json().await.map_err(|e| ApiError {
             message: format!("Failed to parse browse response: {}", e),
             code: None,
         })
+    }
+
+    /// The "Moods & genres" category chips.
+    pub async fn get_moods(&self) -> Result<Vec<MoodCategory>> {
+        let parsed = self.browse("FEmusic_moods_and_genres").await?;
+        Ok(parse_moods(section_list_of(&parsed)))
+    }
+
+    /// A mood/genre detail page (carousels of playlists), browsed by id + params.
+    pub async fn get_mood(&self, browse_id: &str, params: Option<&str>) -> Result<BrowsePage> {
+        let parsed = self.browse_params(browse_id, params).await?;
+        let sections = parse_browse_sections(section_list_of(&parsed));
+        let (title, subtitle, thumbnail) = parse_header(&parsed);
+        Ok(BrowsePage { title, subtitle, thumbnail, songs: vec![], sections })
+    }
+
+    /// A radio / autoplay queue seeded from a video (the `next` endpoint). Skips the seed
+    /// track itself so callers can append the rest to the current queue.
+    pub async fn get_radio(&self, video_id: &str) -> Result<Vec<Song>> {
+        let visitor = cached_visitor_data(&self.client).await;
+        let body = json!({
+            "context": { "client": self.context(&WEB_REMIX, &visitor) },
+            "videoId": video_id,
+            "playlistId": format!("RDAMVM{}", video_id),
+            "isAudioOnly": true,
+            "tunerSettingValue": "AUTOMIX_SETTING_NORMAL",
+            "enablePersistentPlaylistPanel": true,
+        });
+        let response = self.post("next", &WEB_REMIX, &visitor, &body).await?;
+        let parsed: NextResponse = response.json().await.map_err(|e| ApiError {
+            message: format!("Failed to parse next response: {}", e),
+            code: None,
+        })?;
+        Ok(parse_radio(parsed, video_id))
     }
 
     /// The YouTube Music home feed as a list of carousel sections.
@@ -954,6 +1137,87 @@ fn parse_header(parsed: &BrowseResponse) -> (String, Option<String>, Option<Stri
         mt.thumbnail.as_ref()?.thumbnails.last().map(|img| img.url.clone())
     });
     (title, subtitle, thumbnail)
+}
+
+/// Parse the grid of mood/genre navigation buttons.
+fn parse_moods(sections: &[BrowseSectionItem]) -> Vec<MoodCategory> {
+    let mut out = Vec::new();
+    for section in sections {
+        let Some(grid) = section.grid_renderer.as_ref() else { continue };
+        for item in grid.items.iter().flatten() {
+            let Some(btn) = item.music_navigation_button_renderer.as_ref() else { continue };
+            let Some(title) = first_run_text(&btn.button_text) else { continue };
+            let Some(browse) = btn.click_command.as_ref().and_then(|c| c.browse_endpoint.as_ref()) else { continue };
+            let color = btn
+                .solid
+                .as_ref()
+                .and_then(|s| s.left_stripe_color)
+                .map(|c| format!("#{:06X}", (c as u32) & 0x00FF_FFFF));
+            out.push(MoodCategory {
+                title,
+                browse_id: browse.browse_id.clone(),
+                params: browse.params.clone(),
+                color,
+            });
+        }
+    }
+    out
+}
+
+/// Parse a radio/autoplay queue into playable songs (skipping the seed `video_id`).
+fn parse_radio(parsed: NextResponse, seed_id: &str) -> Vec<Song> {
+    let items = parsed
+        .contents
+        .and_then(|c| c.single_column_music_watch_next_results_renderer)
+        .and_then(|r| r.tabbed_renderer)
+        .and_then(|r| r.watch_next_tabbed_results_renderer)
+        .and_then(|r| r.tabs)
+        .and_then(|tabs| tabs.into_iter().next())
+        .and_then(|t| t.tab_renderer)
+        .and_then(|r| r.content)
+        .and_then(|c| c.music_queue_renderer)
+        .and_then(|q| q.content)
+        .and_then(|c| c.playlist_panel_renderer)
+        .and_then(|p| p.contents)
+        .unwrap_or_default();
+
+    let mut songs = Vec::new();
+    for item in items {
+        let video = item
+            .playlist_panel_video_renderer
+            .or_else(|| item.playlist_panel_video_wrapper_renderer.and_then(|w| w.primary_renderer).and_then(|p| p.playlist_panel_video_renderer));
+        let Some(v) = video else { continue };
+        let Some(id) = v.video_id.filter(|id| id != seed_id) else { continue };
+        let title = first_run_text(&v.title).unwrap_or_default();
+        if title.is_empty() {
+            continue;
+        }
+        let artists = v
+            .long_byline_text
+            .as_ref()
+            .and_then(|t| t.runs.as_ref())
+            .map(|runs| {
+                runs.iter()
+                    .filter_map(|run| {
+                        run.navigation_endpoint
+                            .as_ref()
+                            .and_then(|e| e.browse_endpoint.as_ref())
+                            .filter(|b| !b.browse_id.is_empty())
+                            .map(|b| Artist { id: b.browse_id.clone(), name: run.text.clone(), thumbnail: None })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let duration = v
+            .length_text
+            .as_ref()
+            .and_then(|t| t.runs.as_ref())
+            .and_then(|runs| runs.first())
+            .and_then(|run| parse_hms(&run.text));
+        let thumbnail = v.thumbnail.as_ref().and_then(|t| t.thumbnails.last()).map(|img| img.url.clone());
+        songs.push(Song { id, title, artists, album: None, duration, thumbnail, stream_url: None });
+    }
+    songs
 }
 
 fn parse_song_item(item: &MusicResponsiveListItem) -> Option<Song> {

@@ -1,8 +1,8 @@
-import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useSenandung } from '../store'
 import { getTrack } from '../data'
 import { ACCENT, coverBigFor, fmt } from '../helpers'
 import { Hover } from '../Hover'
+import { Slider } from '../Slider'
 import { Shuffle, Repeat, RepeatOne, PrevTrack, NextTrack, PauseGlyph, PlayGlyph, Lyrics } from '../Icons'
 
 export function NowPlayingView() {
@@ -22,7 +22,6 @@ export function NowPlayingView() {
   const cur = getTrack(currentId)
   const duration = cur.dur
   const prog = duration > 0 ? Math.min(progress, duration) : progress
-  const pct = duration > 0 ? Math.min(100, (prog / duration) * 100) : 0
 
   if (!currentId) {
     return (
@@ -30,13 +29,6 @@ export function NowPlayingView() {
         Tidak ada yang diputar.
       </div>
     )
-  }
-
-  const seek = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (duration <= 0) return
-    const r = e.currentTarget.getBoundingClientRect()
-    const x = (e.clientX - r.left) / r.width
-    setProgress(Math.max(0, Math.min(duration, x * duration)))
   }
 
   return (
@@ -51,21 +43,19 @@ export function NowPlayingView() {
       </div>
 
       <div style={{ position: 'relative', width: '100%', maxWidth: '540px', marginTop: '30px' }}>
-        <div onClick={seek} style={{ position: 'relative', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.12)', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: '3px', background: ACCENT, width: pct + '%' }} />
-        </div>
+        <Slider value={duration > 0 ? prog / duration : 0} onChange={(f) => { if (duration > 0) setProgress(f * duration) }} height={6} />
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11.5px', fontFamily: "'JetBrains Mono',monospace", color: '#5d626a' }}>
           <span>{fmt(prog)}</span><span>{fmt(duration)}</span>
         </div>
       </div>
 
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '26px', marginTop: '22px' }}>
-        <div onClick={toggleShuffle} style={{ cursor: 'pointer', color: shuffle ? ACCENT : '#9398a0' }}><Shuffle size={18} /></div>
-        <Hover onClick={prev} style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={22} /></Hover>
-        <Hover onClick={togglePlay} style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
+        <div onClick={toggleShuffle} title={shuffle ? 'Acak: aktif' : 'Acak'} style={{ cursor: 'pointer', color: shuffle ? ACCENT : '#9398a0' }}><Shuffle size={18} /></div>
+        <Hover onClick={prev} title="Sebelumnya" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={22} /></Hover>
+        <Hover onClick={togglePlay} title={isPlaying ? 'Jeda' : 'Putar'} style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
           {isPlaying ? <PauseGlyph size={18} /> : <PlayGlyph size={18} />}
         </Hover>
-        <Hover onClick={next} style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><NextTrack size={22} /></Hover>
+        <Hover onClick={next} title="Berikutnya" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><NextTrack size={22} /></Hover>
         <div onClick={toggleRepeat} title={repeat === 'one' ? 'Ulangi satu lagu' : repeat === 'all' ? 'Ulangi antrean' : 'Ulangi'} style={{ cursor: 'pointer', color: repeat !== 'off' ? ACCENT : '#9398a0' }}>{repeat === 'one' ? <RepeatOne size={18} /> : <Repeat size={18} />}</div>
       </div>
 

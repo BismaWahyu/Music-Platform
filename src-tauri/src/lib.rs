@@ -47,6 +47,9 @@ pub struct Playlist {
     pub thumbnail: Option<String>,
     pub song_count: i32,
     pub songs: Vec<Song>,
+    /// Up to 4 song-cover thumbnails for a mosaic cover (filled by `get_all_playlists`).
+    #[serde(default)]
+    pub covers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-use crate::api::{YouTubeClient, StreamInfo, BrowseSection, BrowsePage};
+use crate::api::{YouTubeClient, StreamInfo, BrowseSection, BrowsePage, MoodCategory};
 use crate::audio::get_player;
 use crate::db::get_db;
 use crate::{Song, Playlist, PlayerState, Lyrics};
@@ -39,6 +39,83 @@ pub async fn get_album(browse_id: String) -> Result<BrowsePage, String> {
 pub async fn get_artist(browse_id: String) -> Result<BrowsePage, String> {
     let client = YouTubeClient::new();
     client.get_artist(&browse_id).await.map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub async fn get_moods() -> Result<Vec<MoodCategory>, String> {
+    let client = YouTubeClient::new();
+    client.get_moods().await.map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub async fn get_mood(browse_id: String, params: Option<String>) -> Result<BrowsePage, String> {
+    let client = YouTubeClient::new();
+    client.get_mood(&browse_id, params.as_deref()).await.map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub async fn get_radio(video_id: String) -> Result<Vec<Song>, String> {
+    let client = YouTubeClient::new();
+    client.get_radio(&video_id).await.map_err(|e| e.message)
+}
+
+// ==================== Spotify import ====================
+
+#[tauri::command]
+pub async fn import_spotify_playlist(app: tauri::AppHandle, url: String) -> Result<Playlist, String> {
+    let sp = crate::api::spotify::fetch_playlist(&url).await.map_err(|e| e.message)?;
+    let description = sp.owner.as_ref().map(|o| format!("Diimpor dari Spotify · {}", o));
+    import_tracks(app, &sp.name, description.as_deref(), &sp.tracks).await
+}
+
+#[tauri::command]
+pub async fn import_csv_playlist(app: tauri::AppHandle, name: String, content: String) -> Result<Playlist, String> {
+    let tracks = crate::api::spotify::parse_csv_tracks(&content).map_err(|e| e.message)?;
+    let display = if name.trim().is_empty() { "Playlist Impor" } else { name.trim() };
+    import_tracks(app, display, Some("Diimpor dari CSV"), &tracks).await
+}
+
+/// Shared import pipeline: create a local playlist, resolve each track to a YouTube Music
+/// song via search, add it, and emit `spotify-import-progress` along the way.
+async fn import_tracks(
+    app: tauri::AppHandle,
+    name: &str,
+    description: Option<&str>,
+    tracks: &[crate::api::spotify::SpotifyTrack],
+) -> Result<Playlist, String> {
+    let playlist_id = uuid::Uuid::new_v4().to_string();
+    {
+        let db_guard = get_db().lock().unwrap();
+        let db = db_guard.as_ref().ok_or("Database not initialized")?;
+        db.create_playlist(&playlist_id, name, description)
+            .map_err(|e| e.to_string())?;
+    }
+
+    let client = YouTubeClient::new();
+    let total = tracks.len();
+    for (i, track) in tracks.iter().enumerate() {
+        let _ = app.emit("spotify-import-progress", serde_json::json!({
+            "done": i, "total": total, "title": track.title,
+        }));
+
+        let query = format!("{} {}", track.artists, track.title);
+        let results = client.search(&query).await.unwrap_or_default();
+        if let Some(best) = crate::api::spotify::pick_best_match(&results, track) {
+            let db_guard = get_db().lock().unwrap();
+            if let Some(db) = db_guard.as_ref() {
+                let _ = db.add_song_to_playlist(&playlist_id, &best, i as i32);
+            }
+        }
+    }
+    let _ = app.emit("spotify-import-progress", serde_json::json!({
+        "done": total, "total": total, "title": "",
+    }));
+
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    db.get_playlist(&playlist_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Gagal memuat playlist hasil impor".to_string())
 }
 
 // ==================== Lyrics ====================
@@ -142,6 +219,15 @@ pub fn get_playlists() -> Result<Vec<Playlist>, String> {
     db.get_all_playlists().map_err(|e| e.to_string())
 }
 
+/// A single playlist WITH its songs (get_all_playlists returns empty song lists).
+#[tauri::command]
+pub fn get_playlist(playlist_id: String) -> Result<Option<Playlist>, String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+
+    db.get_playlist(&playlist_id).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn add_to_playlist(playlist_id: String, song: Song) -> Result<(), String> {
     let db_guard = get_db().lock().unwrap();
@@ -165,6 +251,34 @@ pub fn remove_from_playlist(playlist_id: String, song_id: String) -> Result<(), 
 
     db.remove_song_from_playlist(&playlist_id, &song_id)
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_playlist(playlist_id: String, name: Option<String>, description: Option<String>) -> Result<(), String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+
+    db.update_playlist(&playlist_id, name.as_deref(), description.as_deref())
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_playlist(playlist_id: String) -> Result<(), String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+
+    db.delete_playlist(&playlist_id).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn touch_playlist(playlist_id: String) -> Result<(), String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+
+    db.touch_playlist(&playlist_id).map_err(|e| e.to_string())?;
     Ok(())
 }
 

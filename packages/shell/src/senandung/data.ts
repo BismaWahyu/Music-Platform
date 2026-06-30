@@ -39,6 +39,7 @@ export interface BackendPlaylist {
   thumbnail?: string | null
   song_count: number
   songs: BackendSong[]
+  covers?: string[]
 }
 
 // Empty placeholder used when nothing is playing.

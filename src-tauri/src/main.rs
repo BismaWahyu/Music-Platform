@@ -12,6 +12,11 @@ fn main() {
             music_platform::commands::get_home,
             music_platform::commands::get_album,
             music_platform::commands::get_artist,
+            music_platform::commands::get_moods,
+            music_platform::commands::get_mood,
+            music_platform::commands::get_radio,
+            music_platform::commands::import_spotify_playlist,
+            music_platform::commands::import_csv_playlist,
             // Playback Controls
             music_platform::commands::play,
             music_platform::commands::pause,
@@ -30,8 +35,12 @@ fn main() {
             // Playlist Management
             music_platform::commands::create_playlist,
             music_platform::commands::get_playlists,
+            music_platform::commands::get_playlist,
             music_platform::commands::add_to_playlist,
             music_platform::commands::remove_from_playlist,
+            music_platform::commands::update_playlist,
+            music_platform::commands::delete_playlist,
+            music_platform::commands::touch_playlist,
             // Library
             music_platform::commands::add_to_library,
             music_platform::commands::get_library,

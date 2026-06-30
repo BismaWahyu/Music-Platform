@@ -13,6 +13,9 @@ export const NavSearch = () => (
 export const NavNowPlaying = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="2.6"></circle></svg>
 )
+export const NavExplore = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"></circle><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5" fill="currentColor" stroke="none"></polygon></svg>
+)
 
 export const ChevronLeft = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
@@ -73,6 +76,10 @@ export const WinMin = () => (
 export const WinMax = () => (
   <svg width="11" height="11" viewBox="0 0 11 11"><rect x="1.3" y="1.3" width="8.4" height="8.4" fill="none" stroke="currentColor" strokeWidth="1.2"></rect></svg>
 )
+// Shown instead of WinMax when the window is maximized (restore-down).
+export const WinRestore = () => (
+  <svg width="11" height="11" viewBox="0 0 11 11"><rect x="3" y="1.2" width="6.8" height="6.8" fill="none" stroke="currentColor" strokeWidth="1.1"></rect><rect x="1.2" y="3" width="6.8" height="6.8" fill="none" stroke="currentColor" strokeWidth="1.1"></rect></svg>
+)
 export const WinClose = ({ size = 11 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 11 11"><line x1="1.5" y1="1.5" x2="9.5" y2="9.5" stroke="currentColor" strokeWidth="1.2"></line><line x1="9.5" y1="1.5" x2="1.5" y2="9.5" stroke="currentColor" strokeWidth="1.2"></line></svg>
 )
@@ -85,8 +92,17 @@ export const Check = () => (
 export const Plus = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 )
+export const Heart = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.55-4.74-10.05-9.36C.5 8.96 1.96 5.5 5.2 5.1c2.04-.25 3.5 1.02 3.8 1.92.3-.9 1.76-2.17 3.8-1.92 3.24.4 4.7 3.86 3.25 6.54C19.55 16.26 12 21 12 21z"></path></svg>
+)
 export const Kebab = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+)
+export const Pencil = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
+)
+export const Trash = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
 )
 
 // Animated equalizer bars shown for the currently-playing track row.

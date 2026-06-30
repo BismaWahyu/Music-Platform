@@ -131,6 +131,55 @@ export async function getArtist(browseId: string): Promise<BrowsePage | null> {
   try { return await invoke<BrowsePage>('get_artist', { browseId }) } catch (e) { console.error('get_artist failed', e); return null }
 }
 
+export interface MoodCategory {
+  title: string
+  browse_id: string
+  params?: string | null
+  color?: string | null
+}
+
+export async function getMoods(): Promise<MoodCategory[]> {
+  if (!inTauri) return []
+  try { return await invoke<MoodCategory[]>('get_moods') } catch (e) { console.error('get_moods failed', e); return [] }
+}
+
+export async function getMood(browseId: string, params?: string | null): Promise<BrowsePage | null> {
+  if (!inTauri) return null
+  try { return await invoke<BrowsePage>('get_mood', { browseId, params: params ?? null }) } catch (e) { console.error('get_mood failed', e); return null }
+}
+
+export async function getRadio(videoId: string): Promise<BackendSong[]> {
+  if (!inTauri) return []
+  try { return await invoke<BackendSong[]>('get_radio', { videoId }) } catch (e) { console.error('get_radio failed', e); return [] }
+}
+
+// ==================== Spotify import ====================
+
+export interface SpotifyImportProgress { done: number; total: number; title: string }
+
+/** Import a public Spotify playlist by link. Throws the backend error message on failure. */
+export async function importSpotifyPlaylist(url: string): Promise<BackendPlaylist | null> {
+  if (!inTauri) return null
+  return await invoke<BackendPlaylist>('import_spotify_playlist', { url })
+}
+
+/** Import a playlist from CSV text (e.g. an Exportify export). Throws on failure. */
+export async function importCsvPlaylist(name: string, content: string): Promise<BackendPlaylist | null> {
+  if (!inTauri) return null
+  return await invoke<BackendPlaylist>('import_csv_playlist', { name, content })
+}
+
+export async function onSpotifyImportProgress(cb: (p: SpotifyImportProgress) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  try {
+    const { listen } = await import('@tauri-apps/api/event')
+    return await listen<SpotifyImportProgress>('spotify-import-progress', (e) => cb(e.payload))
+  } catch (e) {
+    console.error('listen spotify-import-progress failed', e)
+    return () => {}
+  }
+}
+
 export async function getLibrary(): Promise<BackendSong[]> {
   if (!inTauri) return []
   try { return await invoke<BackendSong[]>('get_library') } catch (e) { console.error(e); return [] }
@@ -149,6 +198,12 @@ export async function getPlaylists(): Promise<BackendPlaylist[]> {
   try { return await invoke<BackendPlaylist[]>('get_playlists') } catch (e) { console.error(e); return [] }
 }
 
+/** A single playlist WITH its songs (get_playlists returns empty song lists). */
+export async function getPlaylist(playlistId: string): Promise<BackendPlaylist | null> {
+  if (!inTauri) return null
+  try { return await invoke<BackendPlaylist>('get_playlist', { playlistId }) } catch (e) { console.error(e); return null }
+}
+
 export async function addToPlaylist(playlistId: string, song: BackendSong): Promise<void> {
   if (inTauri) { try { await invoke('add_to_playlist', { playlistId, song }) } catch (e) { console.error(e) } }
 }
@@ -157,6 +212,18 @@ export async function createPlaylist(name: string, description?: string): Promis
   if (!inTauri) return null
   try { return await invoke<BackendPlaylist>('create_playlist', { name, description: description ?? null }) }
   catch (e) { console.error(e); return null }
+}
+
+export async function updatePlaylist(playlistId: string, name?: string | null, description?: string | null): Promise<void> {
+  if (inTauri) { try { await invoke('update_playlist', { playlistId, name: name ?? null, description: description ?? null }) } catch (e) { console.error(e) } }
+}
+
+export async function deletePlaylist(playlistId: string): Promise<void> {
+  if (inTauri) { try { await invoke('delete_playlist', { playlistId }) } catch (e) { console.error(e) } }
+}
+
+export async function touchPlaylist(playlistId: string): Promise<void> {
+  if (inTauri) { try { await invoke('touch_playlist', { playlistId }) } catch (e) { console.error(e) } }
 }
 
 /** Subscribe to backend player-state updates. Returns an unsubscribe fn. */

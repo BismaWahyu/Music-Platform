@@ -137,22 +137,48 @@ impl Database {
     }
 
     pub fn get_all_playlists(&self) -> SqliteResult<Vec<Playlist>> {
+        // Most-recently played/updated first (drives the Home "recently played" grid).
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, description, thumbnail FROM playlists ORDER BY created_at DESC"
+            "SELECT id, name, description, thumbnail FROM playlists ORDER BY updated_at DESC, created_at DESC"
         )?;
 
-        let playlists = stmt.query_map([], |row| {
+        let mut playlists = stmt.query_map([], |row| {
             Ok(Playlist {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 description: row.get(2)?,
                 thumbnail: row.get(3)?,
-                song_count: 0, // Will be filled separately
+                song_count: 0,
                 songs: vec![],
+                covers: vec![],
             })
         })?.collect::<SqliteResult<Vec<_>>>()?;
 
+        // Attach up to 4 cover thumbnails per playlist for a mosaic cover.
+        for pl in &mut playlists {
+            pl.covers = self.get_playlist_covers(&pl.id, 4)?;
+        }
         Ok(playlists)
+    }
+
+    /// Up to `limit` distinct, non-empty song-cover thumbnails for a playlist.
+    fn get_playlist_covers(&self, playlist_id: &str, limit: usize) -> SqliteResult<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT s.thumbnail
+             FROM playlist_songs ps JOIN songs s ON s.id = ps.song_id
+             WHERE ps.playlist_id = ?1 AND s.thumbnail IS NOT NULL AND s.thumbnail != ''
+             ORDER BY ps.position LIMIT ?2"
+        )?;
+        let covers = stmt
+            .query_map(rusqlite::params![playlist_id, limit as i64], |row| row.get(0))?
+            .collect::<SqliteResult<Vec<String>>>()?;
+        Ok(covers)
+    }
+
+    /// Bump a playlist's `updated_at` (marks it recently played).
+    pub fn touch_playlist(&self, id: &str) -> SqliteResult<()> {
+        self.conn.execute("UPDATE playlists SET updated_at = unixepoch() WHERE id = ?1", [id])?;
+        Ok(())
     }
 
     pub fn get_playlist(&self, id: &str) -> SqliteResult<Option<Playlist>> {
@@ -168,6 +194,7 @@ impl Database {
                 thumbnail: row.get(3)?,
                 song_count: 0,
                 songs: vec![],
+                covers: vec![],
             })
         }).optional()?;
 

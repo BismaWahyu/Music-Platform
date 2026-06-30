@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSenandung } from './store'
 import { getTrack } from './data'
 import { ACCENT } from './helpers'
@@ -13,6 +14,12 @@ export function QueuePanel() {
   const queue = useSenandung((s) => s.queue)
   const toggleQueue = useSenandung((s) => s.toggleQueue)
   const playSong = useSenandung((s) => s.playSong)
+  const reorderQueue = useSenandung((s) => s.reorderQueue)
+
+  // Drag-to-reorder: track the dragged row and the row it's hovering over (absolute
+  // queue indices). The drop indicator renders above `overIdx`.
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [overIdx, setOverIdx] = useState<number | null>(null)
 
   const qi = queue.findIndex((x) => x.id === currentId)
   const upcoming = qi >= 0 ? queue.slice(qi + 1) : []
@@ -49,16 +56,30 @@ export function QueuePanel() {
         {upcoming.length > 0 ? (
           upcoming.map((song, i) => {
             const t = getTrack(song.id)
+            const abs = qi + 1 + i
+            const dragging = dragIdx === abs
             return (
-              <SongRow
+              <div
                 key={`${song.id}-${i}`}
-                hue={t.hue}
-                thumbnail={t.thumbnail}
-                title={t.title}
-                subtitle={t.artist}
-                onClick={() => void playSong(song)}
-                song={song}
-              />
+                draggable
+                onDragStart={(e) => { setDragIdx(abs); e.dataTransfer.effectAllowed = 'move' }}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (overIdx !== abs) setOverIdx(abs) }}
+                onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) reorderQueue(dragIdx, abs); setDragIdx(null); setOverIdx(null) }}
+                onDragEnd={() => { setDragIdx(null); setOverIdx(null) }}
+                style={{
+                  cursor: 'grab', opacity: dragging ? 0.4 : 1,
+                  borderTop: overIdx === abs && dragIdx !== null && !dragging ? `2px solid ${ACCENT}` : '2px solid transparent',
+                }}
+              >
+                <SongRow
+                  hue={t.hue}
+                  thumbnail={t.thumbnail}
+                  title={t.title}
+                  subtitle={t.artist}
+                  onClick={() => void playSong(song)}
+                  song={song}
+                />
+              </div>
             )
           })
         ) : (

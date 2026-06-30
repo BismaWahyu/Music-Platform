@@ -81,14 +81,26 @@ and the entire active UI lives in `packages/shell/src/senandung/`. (The old unus
     song carries those browseIds) / Save-Remove library / Copy link.
   - `Browse.tsx` — `BrowseCard` + `BrowseCarousel` (reused by Home feed + browse pages).
   - `Toast.tsx` — transient notification pill (playback errors), driven by `store.toast`.
-  - `TitleBar.tsx` — custom window chrome (native decorations are off, see §6).
+  - `Slider.tsx` — reusable click+drag slider with a thumb handle (progress + volume).
+  - `ImportDialog.tsx` — modal to import a playlist, two modes: **Link Spotify** (≤100) or
+    **File CSV** (full, via `<input type=file>` + FileReader); live progress bar. Opened from
+    the "+" on the Sidebar "Daftar Putar" header.
+  - `PlaylistEditDialog.tsx` / `ConfirmDialog.tsx` — edit a playlist (name + description) /
+    generic confirm modal; used by `DetailView`'s edit + delete buttons.
+  - `PlaylistCover.tsx` — playlist artwork from its songs: 2×2 mosaic (≥4 distinct covers),
+    single cover (1–3), or striped fallback. `DetailView` song rows also show per-song covers.
+  - `TitleBar.tsx` — custom window chrome + the **global search box** (with clear button);
+    maximize button swaps `WinMax`/`WinRestore` based on `isWindowMaximized`.
   - `Sidebar.tsx`, `QueuePanel.tsx`, `PlayerBar.tsx`, `MiniPlayer.tsx`.
   - `SenandungApp.tsx` — root: background, title bar, sidebar, current view, queue, player
     bar, toast; on mount loads library + playlists + history + home, and subscribes to
     `player-state-update`, `song-ended` (→ `autoAdvance`), and `playback-error`.
-  - `views/` — `HomeView` (recent + home carousels + library), `LibraryView`,
-    `DetailView` (a DB playlist), `SearchView`, `NowPlayingView`, `LyricsView`,
-    `BrowseView` (album/artist/playlist detail page).
+  - `views/` — `HomeView` (recent playlists + recent songs + home carousels + library),
+    `LibraryView` (hub: Liked Songs tile + playlists), `LikedView` (the liked-songs list),
+    `DetailView` (a DB playlist), `SearchView` (results only; input is in the titlebar),
+    `NowPlayingView`, `LyricsView`, `BrowseView` (album/artist/playlist/mood detail page),
+    `ExploreView` ("Jelajahi" — mood & genre chips).
+  - `PlaylistTile.tsx` — shared `Tile`/`PlaylistTile` (cover + title) for Home + Library.
 
 ### Backend — `src-tauri/src/`
 - `main.rs` — Tauri builder. Registers commands; `setup` initializes the **DB**
@@ -96,7 +108,7 @@ and the entire active UI lives in `packages/shell/src/senandung/`. (The old unus
 - `lib.rs` — shared models (`Song`, `Artist`, `Album`, `Playlist`, `PlayerState`,
   `ApiError`, …) + module declarations.
 - `commands.rs` — all `#[tauri::command]`s (search, stream, lyrics, browse, playback,
-  queue, playlists, library, history). `get_stream_url` returns `StreamInfo { url,
+  queue, playlists incl. `update_playlist`/`delete_playlist`, library, history). `get_stream_url` returns `StreamInfo { url,
   duration }`. `play(app, url, song)` runs download/decode on a background thread (emits
   `playback-error` on failure) and upserts the song's metadata. `add_to_playlist` takes a
   full `Song`. `get_lyrics(title, artist, album?, duration?)`. Browse: `get_home() ->
@@ -105,6 +117,18 @@ and the entire active UI lives in `packages/shell/src/senandung/`. (The old unus
 - `api/youtube.rs` — **InnerTube client** mirroring `core` (search + player + browse, §6).
 - `api/lyrics.rs` — **LRCLIB client**: `fetch_lyrics` tries `/api/get` (exact:
   artist+track+album+duration) then `/api/search`; parses LRC into timestamped `LyricLine`s.
+- `api/spotify.rs` — **Playlist import (no account/API)**:
+  - **By link**: `fetch_playlist` scrapes the public embed `open.spotify.com/embed/playlist/{id}`
+    and parses `__NEXT_DATA__` (`entity.trackList[]` → title/subtitle/duration). Embed caps
+    at ~100 tracks; playlist must be public.
+  - **By CSV** (e.g. Exportify, full track list): `parse_csv_tracks` (RFC-4180 `parse_csv` +
+    tolerant column detection) → tracks. Has unit tests.
+  - `pick_best_match` scores YT `search` results by title+artist token overlap + duration.
+  - Commands `import_spotify_playlist(url)` / `import_csv_playlist(name, content)` share
+    `import_tracks` (create playlist → match each via `search` → add → emit
+    `spotify-import-progress`).
+  - Note: Spotify's anonymous-token endpoints are now blocked (403) + ToS-prohibited, and the
+    official Web API requires Premium — so CSV is the free path to the *complete* playlist.
 - `audio/player.rs` — **audio engine** (see §5).
 - `db/schema.rs` — SQLite layer (see §8).
 - `capabilities/default.json` — Tauri v2 permissions for the custom title bar
@@ -151,7 +175,17 @@ list** to just move within the queue. The QueuePanel "Selanjutnya" reflects the 
 sequential walk over the (already-shuffled) queue. `next()`/`prev()` are manual skips
 (always navigate, wrap around); `autoAdvance()` runs on the backend `song-ended` event and
 respects repeat (`off` → stop at end, `all` → loop, `one` → replay). `SenandungApp`
-subscribes via `onSongEnded`.
+subscribes via `onSongEnded`. `reorderQueue(from,to)` powers drag-to-reorder in QueuePanel.
+
+**Autoplay (`topUpQueue`)**: called on **every advance** (`next()` + `autoAdvance()`), two modes:
+- **`repeat='all'` → sliding ~50 radio window**: played tracks drop off the top, and a radio
+  track is added at the bottom each advance (so the queue always has a fresh tail). The
+  playlist tail beyond 50 is dropped (user-chosen trade-off). Uses a prefetched `radioPool`
+  (refilled from `get_radio` when <8) so it's not a network call per advance.
+- **`repeat` off/one → near-end autoplay**: only tops up when ≤5 upcoming remain, capping at 50.
+`pickNext` returns null at the genuine end for auto (no auto-loop); `autoAdvance` force-fetches
+radio first, falling back to loop (`all`) / stop (`off`). `get_radio` (`next` endpoint) parser
+path verified against a live response (returns ~50 related songs).
 
 **Important UX detail (Spotify-like instant play):** `applyPlayerState` **ignores events
 whose `current_song.id` ≠ the selected `currentId`**, so stale events during the
@@ -212,6 +246,12 @@ The Rust client (`api/youtube.rs`) mirrors `ArchiveTune/core`'s
   single-column `musicShelfRenderer` (songs) + carousels. Returns `BrowseSection`/
   `BrowsePage`. Parsers are deliberately defensive (lots of `Option`) — they degrade to
   empty rather than crash when the JSON shape shifts.
+- **Moods & genres**: `get_moods` (`browseId FEmusic_moods_and_genres` → `gridRenderer`
+  of `musicNavigationButtonRenderer` chips with `browseId`+`params`+stripe color) and
+  `get_mood(browseId, params)` → carousels (`BrowsePage`, no songs).
+- **Radio / autoplay** (`next` endpoint): `get_radio(videoId)` posts to `next` with
+  `playlistId = "RDAMVM"+videoId` and parses `playlistPanelRenderer` into playable songs
+  (skipping the seed). Drives the infinite-queue-on-repeat feature (§4).
 - Header-based auth like core: `X-Goog-Api-Format-Version`, `X-YouTube-Client-Name`
   (= clientId), `X-YouTube-Client-Version`, `X-Origin`, `Referer`, `X-Goog-Visitor-Id`,
   `User-Agent`, `?prettyPrint=false`. **No legacy `?key=`.**
@@ -251,7 +291,9 @@ SQLite at `app_data_dir/senandung.db`. Tables:
   Upserted by `add_to_library`, `add_song_to_playlist`, and `play`. **Referenced by FK** from
   `library` and `history` (the original schema referenced a non-existent `songs` table — fixed).
 - `playlists`, `playlist_songs` (junction). `get_playlist_songs` JOINs `songs` for metadata
-  (it used to return placeholder "Cached Song").
+  (it used to return placeholder "Cached Song"). **`get_all_playlists` returns empty song
+  lists** (sidebar only needs names); the DetailView loads the full playlist via the
+  `get_playlist` command into `store.detailPlaylist` on open (and after add/edit/import).
 - `library` (liked/saved songs, full metadata), `history`, `settings`.
 - `get_history_songs(limit)` JOINs `history`→`songs`, `GROUP BY song_id` with
   `MAX(played_at)` so each track appears once, newest-first ("Baru diputar").
@@ -288,12 +330,39 @@ SQLite at `app_data_dir/senandung.db`. Tables:
 17. **Browse** (2026-06-25): InnerTube `browse` client (`get_home`/`get_album`/`get_artist`)
    + home carousels, `BrowseView` (album/artist/playlist pages), and "Go to artist/album"
    in the song menu. **Parsers unverified against live JSON** — see §6/§7.
+18. **UI/UX batch** (2026-06-25): global search box moved into the `TitleBar` (with a clear
+   button); "Pemutar Musik" text removed; maximize/restore icon reflects window state
+   (`WinRestore`, `onWindowResized`); reusable draggable `Slider` (thumb handle) for progress
+   + volume; `title` tooltips on icon-only controls; drag-to-reorder the queue
+   (`reorderQueue` + HTML5 DnD in `QueuePanel`); **PiP mini mode** — `setMini` shrinks the OS
+   window + sets always-on-top (`enterMiniWindow`/`exitMiniWindow` in `window.ts`).
+19. **Moods & genres** (2026-06-25): `get_moods` (`FEmusic_moods_and_genres` grid) +
+   `get_mood(browseId, params)`; `ExploreView` ("Jelajahi" nav) of colored chips → mood pages
+   reuse `BrowseView`.
+20. **Infinite radio on repeat** (2026-06-25): `get_radio(videoId)` via the InnerTube `next`
+   endpoint; when repeat = 'all', `radioTopUp` appends related songs as the queue runs low,
+   capping the visible queue at 50. See §4.
+21. **Playlist import** (2026-06-25): `api/spotify.rs` — import by **public Spotify link**
+   (embed scrape, ≤100) or **CSV** (Exportify, full list). Matches tracks to YT Music search,
+   saves a local playlist; `ImportDialog` has Link/CSV modes + live progress. Embed path and
+   CSV parser validated (real embed response; CSV unit tests). Matching *quality* is
+   search-dependent and not yet GUI-verified. Anonymous-token path abandoned (Spotify blocks
+   it + ToS-forbidden); official API needs Premium → CSV is the free full-import route.
+22. **Edit / delete playlist** (2026-06-25): `update_playlist`/`delete_playlist` commands (DB
+   layer already existed); `DetailView` edit (pencil) + delete (trash) buttons →
+   `PlaylistEditDialog` / `ConfirmDialog`. Deleting the open playlist returns Home.
+23. **Playlist polish** (2026-06-25): playlist cover = mosaic of song artwork (`PlaylistCover`);
+   per-song covers in `DetailView` rows. Search box removed from the sidebar (it's in the
+   topbar); the topbar **X reliably clears** (`clearSearch` + `stopPropagation` so the drag
+   region doesn't eat the click). Home shows a **recently-played playlists** grid
+   (`get_all_playlists` orders by `updated_at`; `touch_playlist` on play; `Playlist.covers`
+   = up to 4 thumbnails). Per-playlist **Edit/Delete menu** in the sidebar (kebab → dropdown).
 
 ## 10. Suggested next steps
 
-- **Verify in the GUI** — the audio engine rewrite (§5) and all of Browse (§6) are
-  compile-verified only; run `npm run tauri:dev` and confirm playback/seek/browse with real
-  responses, then tune the browse parsers if any feed renders empty.
+- **Verify in the GUI** — the audio engine (§5) and ALL InnerTube features (browse, moods,
+  radio in §6) are compile-verified only; run `npm run tauri:dev` and confirm with real
+  responses, then tune the parsers (`youtube.rs`) if any feed/queue renders empty.
 - **Sleep timer** (client-side, easy).
 - **Lyrics caching** in the DB (currently re-fetched from LRCLIB each open).
 - **True HTTP streaming** (decode-as-download) for lower latency/memory — deferred; risky

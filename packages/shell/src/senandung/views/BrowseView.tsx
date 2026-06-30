@@ -66,7 +66,7 @@ export function BrowseView() {
           <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-end', padding: '24px 42px 30px', position: 'relative', zIndex: 1 }}>
             <div style={{ width: '200px', height: '200px', flex: 'none', borderRadius: round ? '50%' : '12px', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.45)', ...cover }} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>{round ? 'Artis' : ref?.kind === 'playlist' ? 'Daftar Putar' : 'Album'}</div>
+              <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>{round ? 'Artis' : ref?.kind === 'playlist' ? 'Daftar Putar' : ref?.kind === 'mood' ? 'Mood & Genre' : 'Album'}</div>
               <h1 style={{ fontSize: '40px', fontWeight: 800, letterSpacing: '-0.02em', margin: '8px 0 10px', lineHeight: 1.05 }}>{page.title}</h1>
               {page.subtitle && <div style={{ fontSize: '14px', color: '#9398a0' }}>{page.subtitle}</div>}
               {page.songs.length > 0 && (
