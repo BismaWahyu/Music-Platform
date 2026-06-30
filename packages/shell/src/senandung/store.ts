@@ -9,7 +9,7 @@ import type { BackendSong, BackendPlaylist } from './data'
 import {
   inTauri, searchSongs, getStreamUrl, playSong as bePlay, togglePlayback as bePlayPause,
   setVolume as beSetVolume, seek as beSeek, addToHistory, getHistorySongs, getLibrary, getPlaylists,
-  addToLibrary, removeFromLibrary, addToPlaylist as beAddToPlaylist,
+  addToLibrary, removeFromLibrary, addToPlaylist as beAddToPlaylist, removeFromPlaylist as beRemoveFromPlaylist,
   createPlaylist as beCreatePlaylist, updatePlaylist as beUpdatePlaylist, deletePlaylist as beDeletePlaylist,
   touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist,
   getHome, getAlbum, getArtist, getMoods, getMood, getRadio,
@@ -72,6 +72,7 @@ interface SenandungState {
   openPlaylist: (id: string) => Promise<void>
   reloadDetailPlaylist: () => Promise<void>
   playSong: (song: BackendSong, queue?: BackendSong[]) => Promise<void>
+  previewSong: (song: BackendSong) => Promise<void>
   next: () => void
   prev: () => void
   autoAdvance: () => void
@@ -111,6 +112,8 @@ interface SenandungState {
   reorderUserQueue: (from: number, to: number) => void
   _playTrack: (song: BackendSong) => Promise<void>
   addSongToPlaylist: (playlistId: string, song: BackendSong) => Promise<void>
+  removeSongFromPlaylist: (playlistId: string, songId: string) => Promise<void>
+  createPlaylist: (name: string) => Promise<void>
   createPlaylistAndAdd: (name: string, song: BackendSong) => Promise<void>
   updatePlaylist: (id: string, name: string, description: string) => Promise<void>
   deletePlaylist: (id: string) => Promise<void>
@@ -202,6 +205,10 @@ function pickNext(s: SenandungState, auto: boolean): BackendSong | null {
   return null
 }
 
+// Preview cap timer (auto-pause after 1 minute). Cleared whenever real playback starts.
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+function cancelPreview() { if (previewTimer) { clearTimeout(previewTimer); previewTimer = null } }
+
 export const useSenandung = create<SenandungState>((set, get) => ({
   view: 'home',
   detail: null,
@@ -287,7 +294,19 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   // Play a song. Passing `list` starts a NEW context (a click in a view/playlist): it
   // becomes the canonical order (shuffled into the queue if shuffle is on) and the anchor.
   // No list = play a song already in the context (jump within it).
+  // Preview a song in the main player, auto-pausing after 1 minute. Doesn't touch the
+  // queue/context (uses `_playTrack`), so it's a non-committal listen.
+  previewSong: async (song) => {
+    cancelPreview()
+    await get()._playTrack(song)
+    previewTimer = setTimeout(() => {
+      previewTimer = null
+      if (get().currentId === song.id && get().isPlaying) get().togglePlay()
+    }, 60_000)
+  },
+
   playSong: async (song, list) => {
+    cancelPreview()
     registerSong(song)
     if (list && list.length) {
       list.forEach(registerSong)
@@ -302,6 +321,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   },
 
   next: () => {
+    cancelPreview()
     const s = get()
     // The manual queue plays before the context continues.
     if (s.userQueue.length) {
@@ -317,6 +337,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
 
   // Called when the backend reports the current track finished.
   autoAdvance: async () => {
+    cancelPreview()
     const s = get()
     if (s.userQueue.length) {
       const song = s.userQueue[0]
@@ -338,6 +359,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   },
 
   prev: () => {
+    cancelPreview()
     const s = get()
     if (s.progress > 3) { get().setProgress(0); return }
     if (!s.queue.length) return
@@ -628,6 +650,17 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     await beAddToPlaylist(playlistId, song)
     void get().loadPlaylists()
     if (get().detail?.id === playlistId) void get().reloadDetailPlaylist()
+  },
+
+  removeSongFromPlaylist: async (playlistId, songId) => {
+    await beRemoveFromPlaylist(playlistId, songId)
+    void get().loadPlaylists()
+    if (get().detail?.id === playlistId) void get().reloadDetailPlaylist()
+  },
+  createPlaylist: async (name) => {
+    const pl = await beCreatePlaylist(name)
+    await get().loadPlaylists()
+    if (pl) { get().openPlaylist(pl.id); get().showToast(`Daftar putar "${pl.name}" dibuat.`) }
   },
   createPlaylistAndAdd: async (name, song) => {
     const pl = await beCreatePlaylist(name)

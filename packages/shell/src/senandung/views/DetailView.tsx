@@ -9,11 +9,12 @@ import { SongActionButton, useSongMenu } from '../SongActionMenu'
 import { PlaylistCover, coversFromSongs } from '../PlaylistCover'
 import { PlaylistEditDialog } from '../PlaylistEditDialog'
 import { ConfirmDialog } from '../ConfirmDialog'
-import { PlayTriangle, ShuffleArrow, EqBars, Pencil, Trash } from '../Icons'
+import { AddSongsDialog } from '../AddSongsDialog'
+import { PlayTriangle, ShuffleArrow, EqBars, Pencil, Trash, Plus } from '../Icons'
 
-function DetailRow({ song, index, current, playing, onClick }: { song: BackendSong; index: number; current: boolean; playing: boolean; onClick: () => void }) {
+function DetailRow({ song, index, current, playing, onClick, playlistId }: { song: BackendSong; index: number; current: boolean; playing: boolean; onClick: () => void; playlistId: string }) {
   const [hover, setHover] = useState(false)
-  const { onContextMenu, menu } = useSongMenu(song)
+  const { onContextMenu, menu } = useSongMenu(song, playlistId)
   return (
     <div
       onClick={onClick}
@@ -32,7 +33,7 @@ function DetailRow({ song, index, current, playing, onClick }: { song: BackendSo
       </div>
       <div style={{ fontSize: '13px', color: '#9398a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.album?.title ?? ''}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: '12.5px', fontFamily: "'JetBrains Mono',monospace", color: '#5d626a' }}>
-        {hover ? <SongActionButton song={song} visible /> : (song.duration ? fmt(song.duration) : '—')}
+        {hover ? <SongActionButton song={song} visible playlistId={playlistId} /> : (song.duration ? fmt(song.duration) : '—')}
       </div>
       {menu}
     </div>
@@ -50,6 +51,7 @@ export function DetailView() {
   const touchPlaylist = useSenandung((s) => s.touchPlaylist)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   if (!pl) {
     const msg = loading ? 'Memuat…' : 'Daftar putar tidak ditemukan.'
@@ -97,6 +99,7 @@ export function DetailView() {
                 </Hover>
               </>
             )}
+            <Hover onClick={() => setAddOpen(true)} title="Tambah lagu" style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.14)', color: '#c8cace', fontSize: '13.5px', fontWeight: 500, padding: '10px 18px', borderRadius: '24px', cursor: 'pointer' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}><Plus />Tambah lagu</Hover>
             <Hover onClick={() => setEditOpen(true)} title="Edit detail" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c8cace', cursor: 'pointer' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}><Pencil size={17} /></Hover>
             <Hover onClick={() => setConfirmOpen(true)} title="Hapus daftar putar" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c8cace', cursor: 'pointer' }} hover={{ borderColor: 'oklch(0.6 0.2 25 / 0.6)', color: '#f06464' }}><Trash size={17} /></Hover>
           </div>
@@ -105,7 +108,10 @@ export function DetailView() {
 
       <div style={{ padding: '0 42px', position: 'relative', zIndex: 1 }}>
         {songs.length === 0 ? (
-          <div style={{ marginTop: '24px', color: '#54585f', fontSize: '14px' }}>Daftar putar ini masih kosong.</div>
+          <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '16px' }}>
+            <div style={{ color: '#54585f', fontSize: '14px' }}>Daftar putar ini masih kosong.</div>
+            <Hover onClick={() => setAddOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f4f5f6', color: '#0b0c0e', fontSize: '14px', fontWeight: 600, padding: '11px 22px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.03)' }}><Plus />Tambah lagu</Hover>
+          </div>
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: '24px 44px 1fr 180px 56px', alignItems: 'center', gap: '14px', padding: '0 12px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '10.5px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>
@@ -120,6 +126,7 @@ export function DetailView() {
                   current={song.id === currentId}
                   playing={isPlaying}
                   onClick={() => play(song)}
+                  playlistId={pl.id}
                 />
               ))}
             </div>
@@ -127,6 +134,7 @@ export function DetailView() {
         )}
       </div>
 
+      {addOpen && <AddSongsDialog playlistId={pl.id} playlistName={pl.name} existingIds={songs.map((s) => s.id)} onClose={() => setAddOpen(false)} />}
       {editOpen && <PlaylistEditDialog id={pl.id} name={pl.name} description={pl.description} onClose={() => setEditOpen(false)} />}
       {confirmOpen && (
         <ConfirmDialog

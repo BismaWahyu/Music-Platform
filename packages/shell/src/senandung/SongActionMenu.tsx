@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 import { useSenandung } from './store'
 import type { BackendSong } from './data'
 import { ACCENT } from './helpers'
-import { Kebab, ChevronLeft, ChevronRight, Check, Plus, QueueList } from './Icons'
+import { Kebab, ChevronLeft, ChevronRight, Check, Plus, QueueList, Trash } from './Icons'
 
 const MENU_WIDTH = 248
 
@@ -27,13 +27,14 @@ function Item({ icon, label, onClick, trailing }: { icon: ReactNode; label: stri
   )
 }
 
-function Menu({ song, anchor, onClose }: { song: BackendSong; anchor: { x: number; y: number }; onClose: () => void }) {
+function Menu({ song, anchor, onClose, playlistId }: { song: BackendSong; anchor: { x: number; y: number }; onClose: () => void; playlistId?: string }) {
   const playlists = useSenandung((s) => s.playlists)
   const liked = useSenandung((s) => !!s.liked[song.id])
   const enqueueNext = useSenandung((s) => s.enqueueNext)
   const enqueueLast = useSenandung((s) => s.enqueueLast)
   const addSongToPlaylist = useSenandung((s) => s.addSongToPlaylist)
   const createPlaylistAndAdd = useSenandung((s) => s.createPlaylistAndAdd)
+  const removeSongFromPlaylist = useSenandung((s) => s.removeSongFromPlaylist)
   const toggleLibrarySong = useSenandung((s) => s.toggleLibrarySong)
   const openBrowse = useSenandung((s) => s.openBrowse)
 
@@ -81,6 +82,7 @@ function Menu({ song, anchor, onClose }: { song: BackendSong; anchor: { x: numbe
           <Item icon={<QueueList size={16} />} label="Tambah ke antrean" onClick={() => { enqueueLast(song); onClose() }} />
           <Item icon={<PlayNextIcon />} label="Putar berikutnya" onClick={() => { enqueueNext(song); onClose() }} />
           <Item icon={<PlaylistIcon />} label="Tambah ke daftar putar" trailing={<ChevronRight size={15} />} onClick={() => setPage('playlists')} />
+          {playlistId && <Item icon={<span style={{ color: '#f06464', display: 'flex' }}><Trash size={15} /></span>} label="Hapus dari daftar putar" onClick={() => { void removeSongFromPlaylist(playlistId, song.id); onClose() }} />}
           {(artistId || albumId) && <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />}
           {artistId && <Item icon={<ArtistIcon />} label="Buka artis" onClick={() => { void openBrowse('artist', artistId); onClose() }} />}
           {albumId && <Item icon={<AlbumIcon />} label="Buka album" onClick={() => { void openBrowse('album', albumId); onClose() }} />}
@@ -124,18 +126,18 @@ function Menu({ song, anchor, onClose }: { song: BackendSong; anchor: { x: numbe
 
 // Open the song action menu from a right-click. Returns the handler to attach to a row's
 // `onContextMenu` and the menu element to render.
-export function useSongMenu(song: BackendSong) {
+export function useSongMenu(song: BackendSong, playlistId?: string) {
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
   const onContextMenu = (e: ReactMouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setCoords({ x: e.clientX, y: e.clientY })
   }
-  const menu = coords ? createPortal(<Menu song={song} anchor={coords} onClose={() => setCoords(null)} />, document.body) : null
+  const menu = coords ? createPortal(<Menu song={song} anchor={coords} onClose={() => setCoords(null)} playlistId={playlistId} />, document.body) : null
   return { onContextMenu, menu }
 }
 
-export function SongActionButton({ song, visible }: { song: BackendSong; visible: boolean }) {
+export function SongActionButton({ song, visible, playlistId }: { song: BackendSong; visible: boolean; playlistId?: string }) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
   const btnRef = useRef<HTMLDivElement>(null)
@@ -165,7 +167,7 @@ export function SongActionButton({ song, visible }: { song: BackendSong; visible
       >
         <Kebab />
       </div>
-      {open && coords && createPortal(<Menu song={song} anchor={coords} onClose={() => setOpen(false)} />, document.body)}
+      {open && coords && createPortal(<Menu song={song} anchor={coords} onClose={() => setOpen(false)} playlistId={playlistId} />, document.body)}
     </>
   )
 }

@@ -91,6 +91,8 @@ and the entire active UI lives in `packages/shell/src/senandung/`. (The old unus
     generic confirm modal; used by `DetailView`'s edit + delete buttons.
   - `PlaylistCover.tsx` — playlist artwork from its songs: 2×2 mosaic (≥4 distinct covers),
     single cover (1–3), or striped fallback. `DetailView` song rows also show per-song covers.
+  - `AddSongsDialog.tsx` — search-and-add modal opened from `DetailView` ("Tambah lagu");
+    debounced `searchSongs` → `addSongToPlaylist` (stays open; added songs show a check).
   - `TitleBar.tsx` — custom window chrome + the **global search box** (with clear button);
     maximize button swaps `WinMax`/`WinRestore` based on `isWindowMaximized`.
   - `Sidebar.tsx`, `QueuePanel.tsx`, `PlayerBar.tsx`, `MiniPlayer.tsx`.

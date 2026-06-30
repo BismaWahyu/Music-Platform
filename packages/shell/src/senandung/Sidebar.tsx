@@ -8,7 +8,7 @@ import { Hover } from './Hover'
 import { ImportDialog } from './ImportDialog'
 import { PlaylistEditDialog } from './PlaylistEditDialog'
 import { ConfirmDialog } from './ConfirmDialog'
-import { NavHome, NavLibrary, NavNowPlaying, NavExplore, Plus, Kebab, Pencil, Trash } from './Icons'
+import { NavHome, NavLibrary, NavExplore, Plus, Kebab, Pencil, Trash } from './Icons'
 
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
   return (
@@ -124,14 +124,13 @@ export function Sidebar() {
         <NavItem active={view === 'home'} icon={<NavHome />} label="Beranda" onClick={goHome} />
         <NavItem active={view === 'explore'} icon={<NavExplore />} label="Jelajahi" onClick={() => setView('explore')} />
         <NavItem active={view === 'library' || view === 'liked'} icon={<NavLibrary />} label="Pustaka" onClick={() => setView('library')} />
-        <NavItem active={view === 'nowplaying'} icon={<NavNowPlaying />} label="Sedang Diputar" onClick={() => setView('nowplaying')} />
       </div>
 
       <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '16px 8px' }} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px 8px' }}>
         <span style={{ fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>Daftar Putar</span>
-        <Hover onClick={() => setImportOpen(true)} title="Impor playlist dari Spotify" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', cursor: 'pointer', color: '#9398a0' }} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }}><Plus /></Hover>
+        <Hover onClick={() => setImportOpen(true)} title="Tambah daftar putar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', cursor: 'pointer', color: '#9398a0' }} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }}><Plus /></Hover>
       </div>
 
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
