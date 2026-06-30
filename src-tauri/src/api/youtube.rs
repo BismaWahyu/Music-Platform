@@ -783,6 +783,25 @@ impl YouTubeClient {
         Ok(parse_moods(section_list_of(&parsed)))
     }
 
+    /// A representative cover thumbnail for a mood/genre (first card on its page).
+    pub async fn get_mood_cover(&self, browse_id: &str, params: Option<&str>) -> Result<Option<String>> {
+        let parsed = self.browse_params(browse_id, params).await?;
+        for section in section_list_of(&parsed) {
+            let shelf = section
+                .music_carousel_shelf_renderer
+                .as_ref()
+                .or(section.music_immersive_carousel_shelf_renderer.as_ref());
+            for ci in shelf.into_iter().flat_map(|s| s.contents.iter().flatten()) {
+                if let Some(tr) = ci.music_two_row_item_renderer.as_ref() {
+                    if let Some(url) = thumbnail_url(&tr.thumbnail_renderer) {
+                        return Ok(Some(url));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
     /// A mood/genre detail page (carousels of playlists), browsed by id + params.
     pub async fn get_mood(&self, browse_id: &str, params: Option<&str>) -> Result<BrowsePage> {
         let parsed = self.browse_params(browse_id, params).await?;

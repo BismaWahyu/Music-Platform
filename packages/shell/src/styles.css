@@ -100,3 +100,8 @@ button:focus {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
+/* Attention pulse (expanding ring + slight scale) for the CSV help button. */
+@keyframes helppulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.64 0.19 256 / 0.6); transform: scale(1); }
+  50% { box-shadow: 0 0 0 7px oklch(0.64 0.19 256 / 0); transform: scale(1.14); }
+}

@@ -12,7 +12,7 @@ import {
   addToLibrary, removeFromLibrary, addToPlaylist as beAddToPlaylist, removeFromPlaylist as beRemoveFromPlaylist,
   createPlaylist as beCreatePlaylist, updatePlaylist as beUpdatePlaylist, deletePlaylist as beDeletePlaylist,
   touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist,
-  getHome, getAlbum, getArtist, getMoods, getMood, getRadio,
+  getHome, getAlbum, getArtist, getMoods, getMood, getMoodCover, getMoodCovers, saveMoodCovers, getRadio,
   importSpotifyPlaylist, importCsvPlaylist,
   type BackendPlayerState, type BrowseSection, type BrowsePage, type BrowseItem, type BrowseKind,
   type MoodCategory, type SpotifyImportProgress,
@@ -23,6 +23,12 @@ export type View = 'home' | 'library' | 'liked' | 'detail' | 'search' | 'nowplay
 export interface DetailRef { type: 'playlist'; id: string }
 export type BrowseRefKind = BrowseKind | 'mood'
 export interface BrowseRef { kind: BrowseRefKind; id: string }
+
+// All moods share one browseId; `params` is what differentiates them, so cover-cache keys
+// must include both.
+export function moodKey(cat: { browse_id: string; params?: string | null }): string {
+  return `${cat.browse_id}|${cat.params ?? ''}`
+}
 
 // off → no looping; all → loop the queue; one → repeat the current track.
 export type RepeatMode = 'off' | 'all' | 'one'
@@ -57,6 +63,7 @@ interface SenandungState {
   history: BackendSong[]
   home: BrowseSection[]
   moods: MoodCategory[]
+  moodCovers: Record<string, string>  // browseId → representative cover url
   browseRef: BrowseRef | null
   browsePage: BrowsePage | null
   browseLoading: boolean
@@ -86,6 +93,7 @@ interface SenandungState {
   loadHistory: () => Promise<void>
   loadHome: () => Promise<void>
   loadMoods: () => Promise<void>
+  loadMoodCovers: () => Promise<void>
   openMood: (cat: MoodCategory) => Promise<void>
   openBrowse: (kind: BrowseKind, id: string) => Promise<void>
   openBrowseItem: (item: BrowseItem) => void
@@ -239,6 +247,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   history: [],
   home: [],
   moods: [],
+  moodCovers: {},
   browseRef: null,
   browsePage: null,
   browseLoading: false,
@@ -420,8 +429,30 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   },
 
   loadMoods: async () => {
-    const moods = await getMoods()
-    set({ moods })
+    const [moods, cached] = await Promise.all([getMoods(), getMoodCovers()])
+    // Cached covers show instantly; only missing ones are fetched below.
+    set({ moods, moodCovers: { ...cached, ...get().moodCovers } })
+    void get().loadMoodCovers()
+  },
+
+  // Fetch a cover thumbnail for each not-yet-cached mood (limited concurrency), then
+  // persist the result. Keyed by browseId+params: all moods share one browseId, so the
+  // params is what makes each mood distinct.
+  loadMoodCovers: async () => {
+    const moods = get().moods
+    let i = 0
+    let changed = false
+    const worker = async () => {
+      while (i < moods.length) {
+        const cat = moods[i++]
+        const key = moodKey(cat)
+        if (get().moodCovers[key]) continue
+        const url = await getMoodCover(cat.browse_id, cat.params)
+        if (url) { changed = true; set((s) => ({ moodCovers: { ...s.moodCovers, [key]: url } })) }
+      }
+    }
+    await Promise.all(Array.from({ length: 6 }, worker))
+    if (changed) void saveMoodCovers(get().moodCovers)
   },
 
   // Open a mood/genre page (carousels of playlists), reusing the browse detail view.

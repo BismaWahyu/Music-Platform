@@ -54,6 +54,32 @@ pub async fn get_mood(browse_id: String, params: Option<String>) -> Result<Brows
 }
 
 #[tauri::command]
+pub async fn get_mood_cover(browse_id: String, params: Option<String>) -> Result<Option<String>, String> {
+    let client = YouTubeClient::new();
+    client.get_mood_cover(&browse_id, params.as_deref()).await.map_err(|e| e.message)
+}
+
+// Mood cover cache (DB `settings`), so covers aren't re-fetched every session.
+#[tauri::command]
+pub fn get_mood_covers() -> Result<std::collections::HashMap<String, String>, String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    match db.get_setting("mood_covers").map_err(|e| e.to_string())? {
+        Some(json) => Ok(serde_json::from_str(&json).unwrap_or_default()),
+        None => Ok(std::collections::HashMap::new()),
+    }
+}
+
+#[tauri::command]
+pub fn save_mood_covers(covers: std::collections::HashMap<String, String>) -> Result<(), String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    let json = serde_json::to_string(&covers).map_err(|e| e.to_string())?;
+    db.set_setting("mood_covers", &json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_radio(video_id: String) -> Result<Vec<Song>, String> {
     let client = YouTubeClient::new();
     client.get_radio(&video_id).await.map_err(|e| e.message)

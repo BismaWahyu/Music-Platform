@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useSenandung } from '../store'
+import { useSenandung, moodKey } from '../store'
 import { ACCENT } from '../helpers'
 import type { MoodCategory } from '../backend'
 
-function MoodCard({ cat, onClick }: { cat: MoodCategory; onClick: () => void }) {
+function MoodCard({ cat, cover, onClick }: { cat: MoodCategory; cover?: string; onClick: () => void }) {
   const [hover, setHover] = useState(false)
   const base = cat.color || ACCENT
   return (
@@ -12,19 +12,31 @@ function MoodCard({ cat, onClick }: { cat: MoodCategory; onClick: () => void }) 
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        position: 'relative', height: '88px', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer',
-        background: base, transform: hover ? 'scale(1.02)' : 'none', transition: 'transform 0.14s',
-        boxShadow: '0 8px 22px rgba(0,0,0,0.35)',
+        position: 'relative', height: '108px', borderRadius: '13px', overflow: 'hidden', cursor: 'pointer',
+        background: base, transform: hover ? 'translateY(-3px)' : 'none', transition: 'transform 0.18s, box-shadow 0.18s',
+        boxShadow: hover ? '0 16px 34px rgba(0,0,0,0.5)' : '0 8px 22px rgba(0,0,0,0.35)',
       }}
     >
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(0,0,0,0.05), rgba(0,0,0,0.45))' }} />
-      <span style={{ position: 'absolute', left: '14px', top: '12px', right: '12px', fontSize: '15px', fontWeight: 700, color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.4)', lineHeight: 1.2 }}>{cat.title}</span>
+      {/* depth: light from top-left, shadow toward bottom-right */}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.16), transparent 42%, rgba(0,0,0,0.42))' }} />
+      {/* tilted "cover" in the bottom-right corner — the mood's real cover art when loaded,
+          otherwise a decorative tinted card. */}
+      <div
+        style={{
+          position: 'absolute', right: '-16px', bottom: '-20px', width: '78px', height: '78px', borderRadius: '9px',
+          background: cover ? `#000 url(${cover}) center/cover no-repeat` : `linear-gradient(135deg, rgba(255,255,255,0.42), rgba(0,0,0,0.42)), ${base}`,
+          border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 12px 22px rgba(0,0,0,0.5)',
+          transform: hover ? 'rotate(20deg) translate(-6px,-6px)' : 'rotate(26deg)', transition: 'transform 0.22s ease',
+        }}
+      />
+      <span style={{ position: 'absolute', left: '15px', top: '13px', right: '54px', fontSize: '16px', fontWeight: 800, letterSpacing: '-0.01em', color: '#fff', textShadow: '0 1px 8px rgba(0,0,0,0.5)', lineHeight: 1.2 }}>{cat.title}</span>
     </div>
   )
 }
 
 export function ExploreView() {
   const moods = useSenandung((s) => s.moods)
+  const moodCovers = useSenandung((s) => s.moodCovers)
   const openMood = useSenandung((s) => s.openMood)
 
   return (
@@ -35,9 +47,9 @@ export function ExploreView() {
       {moods.length === 0 ? (
         <div style={{ marginTop: '40px', color: '#54585f', fontSize: '14px' }}>Memuat kategori…</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(216px,1fr))', gap: '14px' }}>
           {moods.map((cat, i) => (
-            <MoodCard key={`${cat.browse_id}-${i}`} cat={cat} onClick={() => void openMood(cat)} />
+            <MoodCard key={`${cat.browse_id}-${i}`} cat={cat} cover={moodCovers[moodKey(cat)]} onClick={() => void openMood(cat)} />
           ))}
         </div>
       )}

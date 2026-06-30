@@ -17,6 +17,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('')
   const [csv, setCsv] = useState<{ name: string; content: string } | null>(null)
   const [creating, setCreating] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,7 +77,24 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
         {mode === 'csv' && (
           <>
-            <p style={{ fontSize: '13px', color: '#9398a0', margin: '0 0 14px', lineHeight: 1.5 }}>Pilih file CSV hasil ekspor (mis. Exportify) — <b>seluruh lagu</b> dicocokkan ke YouTube Music.</p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', margin: '0 0 14px' }}>
+              <p style={{ fontSize: '13px', color: '#9398a0', margin: 0, lineHeight: 1.5 }}>Pilih file CSV hasil ekspor (mis. Exportify) — <b>seluruh lagu</b> dicocokkan ke YouTube Music.</p>
+              <div onClick={() => setHelpOpen((v) => !v)} title="Petunjuk impor" style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '50%', cursor: 'pointer', fontSize: '13px', fontWeight: 800, color: '#0b0c0e', background: ACCENT, animation: helpOpen ? 'none' : 'helppulse 1.8s ease-in-out infinite' }}>?</div>
+            </div>
+
+            {helpOpen && (
+              <div style={{ fontSize: '12.5px', color: '#b3b7bd', lineHeight: 1.65, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px', margin: '0 0 14px' }}>
+                <div style={{ fontWeight: 700, color: '#e8e9ea', marginBottom: '6px' }}>Cara mendapatkan file CSV</div>
+                <ol style={{ margin: 0, paddingLeft: '18px' }}>
+                  <li>Buka <b>exportify.net</b> di browser.</li>
+                  <li>Klik <b>Log in with Spotify</b> (gratis, tanpa Premium).</li>
+                  <li>Pada playlist yang diinginkan, klik <b>Export</b> → unduh file <b>.csv</b>.</li>
+                  <li>Kembali ke sini, klik area di bawah, lalu pilih file CSV itu.</li>
+                </ol>
+                <div style={{ marginTop: '8px', color: '#9398a0' }}>Kolom yang dibaca: <b>Track Name</b>, <b>Artist Name(s)</b>, <b>Track Duration (ms)</b>. Tiap lagu dicocokkan via pencarian YouTube Music — sebagian mungkin tidak ketemu atau meleset.</div>
+              </div>
+            )}
+
             <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
             <div onClick={() => { if (!busy) fileRef.current?.click() }} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.06)', border: '1px dashed rgba(255,255,255,0.22)', borderRadius: '10px', padding: '14px', cursor: busy ? 'default' : 'pointer' }}>
               <div style={{ width: '34px', height: '34px', flex: 'none', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ACCENT, fontSize: '11px', fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>CSV</div>

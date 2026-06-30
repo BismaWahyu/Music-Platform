@@ -148,6 +148,20 @@ export async function getMood(browseId: string, params?: string | null): Promise
   try { return await invoke<BrowsePage>('get_mood', { browseId, params: params ?? null }) } catch (e) { console.error('get_mood failed', e); return null }
 }
 
+export async function getMoodCover(browseId: string, params?: string | null): Promise<string | null> {
+  if (!inTauri) return null
+  try { return await invoke<string | null>('get_mood_cover', { browseId, params: params ?? null }) } catch (e) { console.error('get_mood_cover failed', e); return null }
+}
+
+export async function getMoodCovers(): Promise<Record<string, string>> {
+  if (!inTauri) return {}
+  try { return await invoke<Record<string, string>>('get_mood_covers') } catch (e) { console.error(e); return {} }
+}
+
+export async function saveMoodCovers(covers: Record<string, string>): Promise<void> {
+  if (inTauri) { try { await invoke('save_mood_covers', { covers }) } catch (e) { console.error(e) } }
+}
+
 export async function getRadio(videoId: string): Promise<BackendSong[]> {
   if (!inTauri) return []
   try { return await invoke<BackendSong[]>('get_radio', { videoId }) } catch (e) { console.error('get_radio failed', e); return [] }

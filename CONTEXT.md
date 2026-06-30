@@ -261,7 +261,11 @@ The Rust client (`api/youtube.rs`) mirrors `ArchiveTune/core`'s
   empty rather than crash when the JSON shape shifts.
 - **Moods & genres**: `get_moods` (`browseId FEmusic_moods_and_genres` → `gridRenderer`
   of `musicNavigationButtonRenderer` chips with `browseId`+`params`+stripe color) and
-  `get_mood(browseId, params)` → carousels (`BrowsePage`, no songs).
+  `get_mood(browseId, params)` → carousels (`BrowsePage`, no songs). `get_mood_cover` returns
+  the first card's thumbnail — the FE (`loadMoodCovers`, concurrency 6) shows each mood's real
+  YT Music cover art on the Explore card (tilted, Spotify-style), with a tinted card fallback.
+  Covers are **cached in the DB** (`settings.mood_covers` JSON via `get_mood_covers` /
+  `save_mood_covers`) so they load instantly and aren't re-fetched each session.
 - **Radio / autoplay** (`next` endpoint): `get_radio(videoId)` posts to `next` with
   `playlistId = "RDAMVM"+videoId` and parses `playlistPanelRenderer` into playable songs
   (skipping the seed). Drives the infinite-queue-on-repeat feature (§4).
