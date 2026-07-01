@@ -280,18 +280,21 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   },
 
   // Low-level: actually play a track (set current + resolve stream + backend play).
-  // Does NOT touch queue/context/userQueue.
+  // Does NOT touch queue/context/userQueue. Guards against a newer play superseding this
+  // one mid-await (which would otherwise desync the displayed song from the audio).
   _playTrack: async (song) => {
     registerSong(song)
     set({ current: song, currentId: song.id, progress: 0, isPlaying: true })
     if (!inTauri) return
     set({ realMode: true })
     const info = await getStreamUrl(song.id)
+    if (get().currentId !== song.id) return // superseded by a newer play
     if (info) {
       const enriched = { ...song, duration: info.duration ?? song.duration ?? null }
       registerSong(enriched)
       set({ current: enriched })
       const ok = await bePlay(info.url, enriched)
+      if (get().currentId !== song.id) return // superseded while starting playback
       if (!ok) { get().handlePlaybackError(song.id, 'Gagal memulai pemutaran'); return }
       await addToHistory(song.id)
       void get().loadHistory()

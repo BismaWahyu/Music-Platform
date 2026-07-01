@@ -90,7 +90,7 @@ export function TitleBar() {
         <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em' }}>Senandung</span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+      <div data-tauri-drag-region style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <TopSearch />
       </div>
 
