@@ -15,7 +15,7 @@ const label = {
 
 // A draggable list of songs (used for both the user queue and the context queue). `onMove`
 // reorders by index within this list; `onPlay` plays the clicked song.
-function DraggableList({ songs, onPlay, onMove }: { songs: BackendSong[]; onPlay: (i: number) => void; onMove: (from: number, to: number) => void }) {
+function DraggableList({ songs, onPlay, onMove, onRemove }: { songs: BackendSong[]; onPlay: (i: number) => void; onMove: (from: number, to: number) => void; onRemove: (i: number) => void }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
   return (
@@ -33,7 +33,7 @@ function DraggableList({ songs, onPlay, onMove }: { songs: BackendSong[]; onPlay
             onDragEnd={() => { setDragIdx(null); setOverIdx(null) }}
             style={{ cursor: 'grab', opacity: dragging ? 0.4 : 1, borderTop: overIdx === i && dragIdx !== null && !dragging ? `2px solid ${ACCENT}` : '2px solid transparent' }}
           >
-            <SongRow hue={t.hue} thumbnail={t.thumbnail} title={t.title} subtitle={t.artist} onClick={() => onPlay(i)} song={song} />
+            <SongRow hue={t.hue} thumbnail={t.thumbnail} title={t.title} subtitle={t.artist} onClick={() => onPlay(i)} song={song} onRemoveFromQueue={() => onRemove(i)} />
           </div>
         )
       })}
@@ -55,6 +55,8 @@ export function QueuePanel() {
   const reorderUserQueue = useSenandung((s) => s.reorderUserQueue)
   const reorderQueue = useSenandung((s) => s.reorderQueue)
   const clearUserQueue = useSenandung((s) => s.clearUserQueue)
+  const removeFromUserQueue = useSenandung((s) => s.removeFromUserQueue)
+  const removeFromContextQueue = useSenandung((s) => s.removeFromContextQueue)
 
   // "Next from <context>" = the context songs after the anchor.
   const ci = queue.findIndex((x) => x.id === ctxId)
@@ -64,14 +66,14 @@ export function QueuePanel() {
   return (
     <div style={{ width: '320px', flex: 'none', background: 'rgba(18,20,26,0.42)', backdropFilter: 'blur(44px) saturate(185%)', WebkitBackdropFilter: 'blur(44px) saturate(185%)', borderLeft: '1px solid rgba(255,255,255,0.09)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 18px 14px' }}>
-        <span style={{ fontSize: '15px', fontWeight: 600 }}>Antrean</span>
+        <span style={{ fontSize: '15px', fontWeight: 600 }}>Queue</span>
         <Hover onClick={toggleQueue} style={{ color: '#9398a0', cursor: 'pointer', lineHeight: 0 }} hover={{ color: '#e8e9ea' }}><WinClose size={15} /></Hover>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px 16px' }}>
         {current ? (
           <>
-            <div style={{ ...label, padding: '0 8px 10px' }}>Sedang Diputar</div>
+            <div style={{ ...label, padding: '0 8px 10px' }}>Now Playing</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '9px', background: 'rgba(255,255,255,0.03)' }}>
               <SongThumb hue={cur.hue} thumbnail={cur.thumbnail} size={40} current playing={isPlaying} />
               <div style={{ minWidth: 0 }}>
@@ -81,26 +83,26 @@ export function QueuePanel() {
             </div>
           </>
         ) : (
-          <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Tidak ada yang diputar.</div>
+          <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Nothing playing.</div>
         )}
 
         {userQueue.length > 0 && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 8px 10px' }}>
-              <span style={label}>Selanjutnya di antrean</span>
-              <Hover onClick={clearUserQueue} style={{ fontSize: '11px', color: '#9398a0', cursor: 'pointer' }} hover={{ color: '#e8e9ea' }}>Bersihkan</Hover>
+              <span style={label}>Next in queue</span>
+              <Hover onClick={clearUserQueue} style={{ fontSize: '11px', color: '#9398a0', cursor: 'pointer' }} hover={{ color: '#e8e9ea' }}>Clear</Hover>
             </div>
-            <DraggableList songs={userQueue} onPlay={(i) => playUserQueueAt(i)} onMove={reorderUserQueue} />
+            <DraggableList songs={userQueue} onPlay={(i) => playUserQueueAt(i)} onMove={reorderUserQueue} onRemove={removeFromUserQueue} />
           </>
         )}
 
         {current && (
-          <div style={{ ...label, padding: '18px 8px 10px' }}>{contextLabel ? `Selanjutnya dari: ${contextLabel}` : 'Selanjutnya'}</div>
+          <div style={{ ...label, padding: '18px 8px 10px' }}>{contextLabel ? `Next from: ${contextLabel}` : 'Up next'}</div>
         )}
         {upcoming.length > 0 ? (
-          <DraggableList songs={upcoming} onPlay={(i) => void playSong(upcoming[i])} onMove={(from, to) => reorderQueue(ci + 1 + from, ci + 1 + to)} />
+          <DraggableList songs={upcoming} onPlay={(i) => void playSong(upcoming[i])} onMove={(from, to) => reorderQueue(ci + 1 + from, ci + 1 + to)} onRemove={(i) => removeFromContextQueue(ci + 1 + i)} />
         ) : (
-          current && userQueue.length === 0 && <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Antrean kosong.</div>
+          current && userQueue.length === 0 && <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Queue is empty.</div>
         )}
       </div>
     </div>

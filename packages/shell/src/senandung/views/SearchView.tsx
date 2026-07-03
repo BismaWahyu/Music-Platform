@@ -15,25 +15,25 @@ export function SearchView() {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '34px 42px 44px' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>{q ? `Hasil untuk "${q}"` : 'Cari'}</h1>
+      <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>{q ? `Results for "${q}"` : 'Search'}</h1>
 
       {q === '' && (
         <div style={{ marginTop: '48px', textAlign: 'center', color: '#54585f', fontSize: '14px' }}>
-          Ketik untuk mencari lagu di YouTube Music.
+          Type to search songs on YouTube Music.
         </div>
       )}
 
       {q !== '' && isSearching && (
-        <div style={{ marginTop: '48px', textAlign: 'center', color: '#54585f', fontSize: '14px' }}>Mencari…</div>
+        <div style={{ marginTop: '48px', textAlign: 'center', color: '#54585f', fontSize: '14px' }}>Searching…</div>
       )}
 
       {q !== '' && !isSearching && results.length === 0 && (
-        <div style={{ marginTop: '48px', textAlign: 'center', color: '#54585f', fontSize: '14px' }}>Tidak ada hasil yang cocok.</div>
+        <div style={{ marginTop: '48px', textAlign: 'center', color: '#54585f', fontSize: '14px' }}>No matching results.</div>
       )}
 
       {q !== '' && !isSearching && results.length > 0 && (
         <div style={{ marginTop: '32px' }}>
-          <h2 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 12px', color: '#9398a0', letterSpacing: '0.04em' }}>Lagu</h2>
+          <h2 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 12px', color: '#9398a0', letterSpacing: '0.04em' }}>Songs</h2>
           {results.map((song) => {
             const isCur = song.id === currentId
             const albumTitle = song.album?.title ?? ''

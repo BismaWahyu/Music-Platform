@@ -17,17 +17,17 @@ export function LibraryView() {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '34px 42px 44px' }}>
-      <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 22px' }}>Pustaka</h1>
+      <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 22px' }}>Library</h1>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: '10px' }}>
-        <Tile cover={heartCover} title={`Lagu Disukai · ${library.length}`} onClick={() => setView('liked')} />
+        <Tile cover={heartCover} title={`Liked Songs · ${library.length}`} onClick={() => setView('liked')} />
         {playlists.map((pl) => (
           <PlaylistTile key={pl.id} pl={pl} onClick={() => void openPlaylist(pl.id)} />
         ))}
       </div>
 
       {playlists.length === 0 && library.length === 0 && (
-        <div style={{ marginTop: '40px', fontSize: '13.5px', color: '#54585f' }}>Sukai lagu atau impor playlist untuk mengisi pustakamu.</div>
+        <div style={{ marginTop: '40px', fontSize: '13.5px', color: '#54585f' }}>Like a song or import a playlist to fill your library.</div>
       )}
     </div>
   )

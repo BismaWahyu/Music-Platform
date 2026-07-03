@@ -17,7 +17,7 @@ export function NowPlayingView() {
   const prev = useSenandung((s) => s.prev)
   const toggleShuffle = useSenandung((s) => s.toggleShuffle)
   const toggleRepeat = useSenandung((s) => s.toggleRepeat)
-  const setView = useSenandung((s) => s.setView)
+  const toggleLyrics = useSenandung((s) => s.toggleLyrics)
 
   const cur = getTrack(currentId)
   const duration = cur.dur
@@ -26,7 +26,7 @@ export function NowPlayingView() {
   if (!currentId) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#54585f', fontSize: '14px' }}>
-        Tidak ada yang diputar.
+        Nothing playing.
       </div>
     )
   }
@@ -50,17 +50,17 @@ export function NowPlayingView() {
       </div>
 
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '26px', marginTop: '22px' }}>
-        <div onClick={toggleShuffle} title={shuffle ? 'Acak: aktif' : 'Acak'} style={{ cursor: 'pointer', color: shuffle ? ACCENT : '#9398a0' }}><Shuffle size={18} /></div>
-        <Hover onClick={prev} title="Sebelumnya" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={22} /></Hover>
-        <Hover onClick={togglePlay} title={isPlaying ? 'Jeda' : 'Putar'} style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
+        <div onClick={toggleShuffle} title={shuffle ? 'Shuffle: on' : 'Shuffle'} style={{ cursor: 'pointer', color: shuffle ? ACCENT : '#9398a0' }}><Shuffle size={18} /></div>
+        <Hover onClick={prev} title="Previous" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={22} /></Hover>
+        <Hover onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'} style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
           {isPlaying ? <PauseGlyph size={18} /> : <PlayGlyph size={18} />}
         </Hover>
-        <Hover onClick={next} title="Berikutnya" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><NextTrack size={22} /></Hover>
-        <div onClick={toggleRepeat} title={repeat === 'one' ? 'Ulangi satu lagu' : repeat === 'all' ? 'Ulangi antrean' : 'Ulangi'} style={{ cursor: 'pointer', color: repeat !== 'off' ? ACCENT : '#9398a0' }}>{repeat === 'one' ? <RepeatOne size={18} /> : <Repeat size={18} />}</div>
+        <Hover onClick={next} title="Next" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><NextTrack size={22} /></Hover>
+        <div onClick={toggleRepeat} title={repeat === 'one' ? 'Repeat one' : repeat === 'all' ? 'Repeat queue' : 'Repeat'} style={{ cursor: 'pointer', color: repeat !== 'off' ? ACCENT : '#9398a0' }}>{repeat === 'one' ? <RepeatOne size={18} /> : <Repeat size={18} />}</div>
       </div>
 
-      <Hover onClick={() => setView('lyrics')} style={{ position: 'relative', marginTop: '26px', fontSize: '12.5px', letterSpacing: '0.06em', color: '#9398a0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }} hover={{ color: '#e8e9ea' }}>
-        <Lyrics size={15} />Lihat Lirik
+      <Hover onClick={toggleLyrics} style={{ position: 'relative', marginTop: '26px', fontSize: '12.5px', letterSpacing: '0.06em', color: '#9398a0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }} hover={{ color: '#e8e9ea' }}>
+        <Lyrics size={15} />View Lyrics
       </Hover>
     </div>
   )

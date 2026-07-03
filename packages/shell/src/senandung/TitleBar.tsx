@@ -50,11 +50,11 @@ function TopSearch() {
         onChange={(e) => onType(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder="Cari lagu, artis, atau album"
+        placeholder="Search songs, artists, or albums"
         style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: '#e8e9ea', fontSize: '13px' }}
       />
       {query && (
-        <div onClick={clear} title="Bersihkan pencarian" style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '50%', cursor: 'pointer', color: '#9398a0', background: 'rgba(255,255,255,0.08)' }}>
+        <div onClick={clear} title="Clear search" style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '50%', cursor: 'pointer', color: '#9398a0', background: 'rgba(255,255,255,0.08)' }}>
           <WinClose size={9} />
         </div>
       )}
@@ -85,9 +85,9 @@ export function TitleBar() {
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '11px', flex: 'none', pointerEvents: 'none' }}>
-        <div style={{ width: '13px', height: '13px', borderRadius: '4px', background: 'oklch(0.64 0.19 256)', transform: 'rotate(45deg)' }} />
-        <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em' }}>Senandung</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 'none', pointerEvents: 'none' }}>
+        <img src="/SwayTuneDark.png" alt="" width={19} height={19} style={{ borderRadius: '5px', display: 'block' }} />
+        <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em' }}>SwayTune</span>
       </div>
 
       <div data-tauri-drag-region style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
@@ -95,9 +95,9 @@ export function TitleBar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-        <Hover style={btn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }} onClick={winMinimize} title="Minimalkan"><WinMin /></Hover>
-        <Hover style={btn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }} onClick={winToggleMaximize} title={maxed ? 'Pulihkan' : 'Maksimalkan'}>{maxed ? <WinRestore /> : <WinMax />}</Hover>
-        <Hover style={btn} hover={{ background: '#e23b3b', color: '#ffffff' }} onClick={winClose} title="Tutup"><WinClose /></Hover>
+        <Hover style={btn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }} onClick={winMinimize} title="Minimize"><WinMin /></Hover>
+        <Hover style={btn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }} onClick={winToggleMaximize} title={maxed ? 'Restore' : 'Maximize'}>{maxed ? <WinRestore /> : <WinMax />}</Hover>
+        <Hover style={btn} hover={{ background: '#e23b3b', color: '#ffffff' }} onClick={winClose} title="Close"><WinClose /></Hover>
       </div>
     </div>
   )

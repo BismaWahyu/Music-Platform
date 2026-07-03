@@ -13,7 +13,7 @@ import {
   createPlaylist as beCreatePlaylist, updatePlaylist as beUpdatePlaylist, deletePlaylist as beDeletePlaylist,
   touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist,
   getHome, getAlbum, getArtist, getMoods, getMood, getMoodCover, getMoodCovers, saveMoodCovers, getRadio,
-  importSpotifyPlaylist, importCsvPlaylist,
+  getCharts, resolveDuration, importSpotifyPlaylist, importCsvPlaylist,
   type BackendPlayerState, type BrowseSection, type BrowsePage, type BrowseItem, type BrowseKind,
   type MoodCategory, type SpotifyImportProgress,
 } from './backend'
@@ -21,6 +21,8 @@ import { enterMiniWindow, exitMiniWindow } from './window'
 
 export type View = 'home' | 'library' | 'liked' | 'detail' | 'search' | 'nowplaying' | 'lyrics' | 'browse' | 'explore'
 export interface DetailRef { type: 'playlist'; id: string }
+// A region's charts (e.g. Indonesia / Global) for the Home page.
+export interface ChartGroup { region: string; label: string; sections: BrowseSection[] }
 export type BrowseRefKind = BrowseKind | 'mood'
 export interface BrowseRef { kind: BrowseRefKind; id: string }
 
@@ -47,10 +49,12 @@ interface SenandungState {
   isPlaying: boolean
   progress: number
   volume: number
+  _preMuteVolume: number  // internal: volume to restore when unmuting
   shuffle: boolean
   repeat: RepeatMode
   queueOpen: boolean
   miniMode: boolean
+  lyricsFrom: View        // where to return when closing the lyrics view
   query: string
   liked: Record<string, boolean>
   realMode: boolean
@@ -62,6 +66,7 @@ interface SenandungState {
   detailLoading: boolean
   history: BackendSong[]
   home: BrowseSection[]
+  charts: ChartGroup[]
   moods: MoodCategory[]
   moodCovers: Record<string, string>  // browseId → representative cover url
   browseRef: BrowseRef | null
@@ -92,6 +97,8 @@ interface SenandungState {
   loadPlaylists: () => Promise<void>
   loadHistory: () => Promise<void>
   loadHome: () => Promise<void>
+  loadCharts: () => Promise<void>
+  ensureDurations: (songs: BackendSong[]) => Promise<void>
   loadMoods: () => Promise<void>
   loadMoodCovers: () => Promise<void>
   openMood: (cat: MoodCategory) => Promise<void>
@@ -110,11 +117,15 @@ interface SenandungState {
   setShuffle: (on: boolean) => void
   toggleRepeat: () => void
   toggleQueue: () => void
+  toggleMute: () => void
+  toggleLyrics: () => void
   toggleLike: () => Promise<void>
   setMini: (mini: boolean) => void
   enqueueNext: (song: BackendSong) => void
   enqueueLast: (song: BackendSong) => void
   reorderQueue: (from: number, to: number) => void
+  removeFromUserQueue: (index: number) => void
+  removeFromContextQueue: (index: number) => void
   clearUserQueue: () => void
   playUserQueueAt: (index: number) => void
   reorderUserQueue: (from: number, to: number) => void
@@ -163,7 +174,7 @@ async function runImport(
     set({ importing: false, importProgress: null })
     if (pl) {
       get().openPlaylist(pl.id)
-      get().showToast(`Playlist "${pl.name}" diimpor — ${pl.songs.length} lagu.`)
+      get().showToast(`Playlist "${pl.name}" imported — ${pl.songs.length} songs.`)
     }
     return true
   } catch (e) {
@@ -190,9 +201,9 @@ function browseItemToSong(item: BrowseItem): BackendSong {
 function contextLabelOf(s: SenandungState): string {
   if (s.view === 'detail' && s.detailPlaylist) return s.detailPlaylist.name
   if (s.view === 'browse' && s.browsePage) return s.browsePage.title
-  if (s.view === 'search') return 'Hasil pencarian'
-  if (s.view === 'liked') return 'Lagu Disukai'
-  if (s.view === 'library') return 'Pustaka'
+  if (s.view === 'search') return 'Search results'
+  if (s.view === 'liked') return 'Liked Songs'
+  if (s.view === 'library') return 'Library'
   return ''
 }
 
@@ -217,6 +228,33 @@ function pickNext(s: SenandungState, auto: boolean): BackendSong | null {
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 function cancelPreview() { if (previewTimer) { clearTimeout(previewTimer); previewTimer = null } }
 
+// Song ids we've already tried to resolve a duration for this session (success or not),
+// so `ensureDurations` never re-requests the same track.
+const durationTried = new Set<string>()
+// Circuit breaker: if resolving keeps failing (e.g. the client is being throttled), stop
+// backfilling for the rest of the session so we don't hammer the network.
+let durationFailStreak = 0
+let durationBackfillOff = false
+
+// Patch a freshly-resolved duration into the store lists that actually contain this song,
+// so the UI updates in place (views read `song.duration` directly). Only rebuilds the
+// arrays that change, to avoid churning unrelated subscribers.
+function patchDuration(set: (fn: (s: SenandungState) => Partial<SenandungState>) => void, id: string, dur: number) {
+  const needs = (arr: BackendSong[]) => arr.some((s) => s.id === id && !s.duration)
+  const fix = (arr: BackendSong[]) => arr.map((s) => (s.id === id && !s.duration ? { ...s, duration: dur } : s))
+  set((s) => {
+    const out: Partial<SenandungState> = {}
+    if (s.detailPlaylist && needs(s.detailPlaylist.songs)) out.detailPlaylist = { ...s.detailPlaylist, songs: fix(s.detailPlaylist.songs) }
+    if (needs(s.library)) out.library = fix(s.library)
+    if (needs(s.searchResults)) out.searchResults = fix(s.searchResults)
+    if (needs(s.queue)) out.queue = fix(s.queue)
+    if (needs(s.userQueue)) out.userQueue = fix(s.userQueue)
+    if (needs(s.history)) out.history = fix(s.history)
+    if (s.browsePage && needs(s.browsePage.songs)) out.browsePage = { ...s.browsePage, songs: fix(s.browsePage.songs) }
+    return out
+  })
+}
+
 export const useSenandung = create<SenandungState>((set, get) => ({
   view: 'home',
   detail: null,
@@ -231,10 +269,12 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   isPlaying: false,
   progress: 0,
   volume: 0.7,
+  _preMuteVolume: 0.7,
   shuffle: false,
   repeat: 'off',
   queueOpen: false,
   miniMode: false,
+  lyricsFrom: 'home',
   query: '',
   liked: {},
   realMode: false,
@@ -246,6 +286,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   detailLoading: false,
   history: [],
   home: [],
+  charts: [],
   moods: [],
   moodCovers: {},
   browseRef: null,
@@ -267,6 +308,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     if (get().detail?.id !== id) return // navigated away while loading
     pl?.songs.forEach(registerSong)
     set({ detailPlaylist: pl, detailLoading: false })
+    if (pl) void get().ensureDurations(pl.songs)
   },
 
   // Refresh the open playlist's songs (after adding/removing/importing).
@@ -277,6 +319,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     if (get().detail?.id !== id) return
     pl?.songs.forEach(registerSong)
     set({ detailPlaylist: pl })
+    if (pl) void get().ensureDurations(pl.songs)
   },
 
   // Low-level: actually play a track (set current + resolve stream + backend play).
@@ -295,11 +338,11 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       set({ current: enriched })
       const ok = await bePlay(info.url, enriched)
       if (get().currentId !== song.id) return // superseded while starting playback
-      if (!ok) { get().handlePlaybackError(song.id, 'Gagal memulai pemutaran'); return }
+      if (!ok) { get().handlePlaybackError(song.id, 'Failed to start playback'); return }
       await addToHistory(song.id)
       void get().loadHistory()
     } else {
-      get().handlePlaybackError(song.id, 'Tidak ada URL stream untuk lagu ini')
+      get().handlePlaybackError(song.id, 'No stream URL for this song')
     }
   },
 
@@ -409,6 +452,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     const liked = { ...get().liked }
     library.forEach((s) => { liked[s.id] = true })
     set({ library, liked })
+    void get().ensureDurations(library)
   },
 
   loadPlaylists: async () => {
@@ -429,6 +473,50 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       if (it.kind === 'song') registerSong(browseItemToSong(it))
     }))
     set({ home })
+  },
+
+  // Fetch region charts (Indonesia + Global) for the Home page. Best-effort: a region that
+  // errors or returns nothing is simply omitted.
+  loadCharts: async () => {
+    const regions: { region: string; label: string }[] = [
+      { region: 'ID', label: 'Top charts · Indonesia' },
+      { region: 'ZZ', label: 'Top charts · Global' },
+    ]
+    const results = await Promise.all(regions.map((r) => getCharts(r.region)))
+    const charts: ChartGroup[] = regions
+      // Cap items per section so a "Top 100" shelf doesn't render hundreds of cards.
+      .map((r, i) => ({ ...r, sections: results[i].map((sec) => ({ ...sec, items: sec.items.slice(0, 20) })) }))
+      .filter((g) => g.sections.length > 0)
+    charts.forEach((g) => g.sections.forEach((sec) => sec.items.forEach((it) => {
+      if (it.kind === 'song') registerSong(browseItemToSong(it))
+    })))
+    set({ charts })
+  },
+
+  // Resolve + cache durations for songs that don't have one yet, so lists show durations
+  // without playing. Concurrency-limited; each id is only ever attempted once per session.
+  ensureDurations: async (songs) => {
+    if (!inTauri || durationBackfillOff) return
+    // Cap each pass so a big list (whole library / long playlist) can't fire a burst of
+    // heavy player requests at once.
+    const todo = songs.filter((s) => !s.duration && s.id && !durationTried.has(s.id)).slice(0, 20)
+    if (!todo.length) return
+    todo.forEach((s) => durationTried.add(s.id))
+    let i = 0
+    const worker = async () => {
+      while (i < todo.length && !durationBackfillOff) {
+        const song = todo[i++]
+        const dur = await resolveDuration(song.id)
+        if (dur && dur > 0) {
+          durationFailStreak = 0
+          patchDuration(set, song.id, dur)
+        } else {
+          // A run of failures means we're likely being throttled — stop for this session.
+          if (++durationFailStreak >= 6) { durationBackfillOff = true }
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: 2 }, worker))
   },
 
   loadMoods: async () => {
@@ -481,6 +569,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       if (it.kind === 'song') registerSong(browseItemToSong(it))
     }))
     set({ browsePage: page, browseLoading: false })
+    if (page) void get().ensureDurations(page.songs)
   },
 
   // Act on a browse card: play a song, or navigate into an album/playlist/artist.
@@ -567,17 +656,17 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   handlePlaybackError: (songId, message) => {
     const s = get()
     if (songId !== s.currentId) return // stale error for a track we already moved past
-    const title = getTrack(songId).title || 'Lagu ini'
+    const title = getTrack(songId).title || 'This song'
     const streak = s._failStreak + 1
     const cap = Math.min(Math.max(s.queue.length, 1), 6)
     if (streak >= cap) {
       set({ _failStreak: 0, isPlaying: false })
-      s.showToast('Beberapa lagu gagal diputar. Coba lagi nanti.')
+      s.showToast('A few songs failed to play. Try again later.')
       console.error('playback error (giving up):', message)
       return
     }
     set({ _failStreak: streak })
-    s.showToast(`Gagal memutar "${title}" — melewati…`)
+    s.showToast(`Couldn't play "${title}" — skipping…`)
     // Skip like a manual "next" (ignores repeat-one so we don't retry the bad track).
     if (s.queue.length > 1) get().next()
     else set({ isPlaying: false })
@@ -616,6 +705,24 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   toggleRepeat: () => set((s) => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
   toggleQueue: () => set((s) => ({ queueOpen: !s.queueOpen })),
 
+  // Mute/unmute: drop the volume to 0, remembering the previous level to restore on unmute.
+  toggleMute: () => {
+    const s = get()
+    if (s.volume > 0) {
+      set({ _preMuteVolume: s.volume })
+      get().setVolume(0)
+    } else {
+      get().setVolume(s._preMuteVolume > 0 ? s._preMuteVolume : 0.7)
+    }
+  },
+
+  // Open the lyrics view, or close it (returning to the previous view) if already open.
+  toggleLyrics: () => {
+    const s = get()
+    if (s.view === 'lyrics') set({ view: s.lyricsFrom })
+    else set({ lyricsFrom: s.view, view: 'lyrics' })
+  },
+
   toggleLike: async () => {
     const s = get()
     if (!s.current) return
@@ -636,10 +743,10 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   setImportProgress: (p) => set({ importProgress: p }),
 
   // Import a public Spotify playlist by link (scrapes the embed; no Spotify account).
-  importSpotify: async (url) => runImport(get, set, () => importSpotifyPlaylist(url), 'Gagal mengimpor playlist Spotify.'),
+  importSpotify: async (url) => runImport(get, set, () => importSpotifyPlaylist(url), 'Failed to import the Spotify playlist.'),
 
   // Import a playlist from a CSV (e.g. an Exportify export) — gets the full track list.
-  importCsv: async (name, content) => runImport(get, set, () => importCsvPlaylist(name, content), 'Gagal mengimpor CSV.'),
+  importCsv: async (name, content) => runImport(get, set, () => importCsvPlaylist(name, content), 'Failed to import the CSV.'),
 
   // "Play next" → front of the manual queue. "Add to queue" → end of it. The manual queue
   // plays before the context resumes and is shown as "Next in queue".
@@ -653,6 +760,20 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   },
 
   clearUserQueue: () => set({ userQueue: [] }),
+
+  // Remove a song from the manual "Next in queue" list.
+  removeFromUserQueue: (index) => set((s) => {
+    if (index < 0 || index >= s.userQueue.length) return {}
+    return { userQueue: s.userQueue.filter((_, i) => i !== index) }
+  }),
+
+  // Remove a song from the context queue (absolute index). Never removes the anchor track.
+  removeFromContextQueue: (index) => set((s) => {
+    if (index < 0 || index >= s.queue.length || s.queue[index].id === s.ctxId) return {}
+    const q = [...s.queue]
+    q.splice(index, 1)
+    return { queue: q, queueOriginal: q }
+  }),
 
   // Click a song in "Next in queue": play it and drop it + everything before it.
   playUserQueueAt: (index) => {
@@ -694,7 +815,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   createPlaylist: async (name) => {
     const pl = await beCreatePlaylist(name)
     await get().loadPlaylists()
-    if (pl) { get().openPlaylist(pl.id); get().showToast(`Daftar putar "${pl.name}" dibuat.`) }
+    if (pl) { get().openPlaylist(pl.id); get().showToast(`Playlist "${pl.name}" created.`) }
   },
   createPlaylistAndAdd: async (name, song) => {
     const pl = await beCreatePlaylist(name)
@@ -706,14 +827,14 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     await beUpdatePlaylist(id, name, description)
     await get().loadPlaylists()
     if (get().detail?.id === id) void get().reloadDetailPlaylist()
-    get().showToast('Daftar putar diperbarui.')
+    get().showToast('Playlist updated.')
   },
 
   deletePlaylist: async (id) => {
     await beDeletePlaylist(id)
     await get().loadPlaylists()
     if (get().detail?.id === id) get().goHome()
-    get().showToast('Daftar putar dihapus.')
+    get().showToast('Playlist deleted.')
   },
 
   // Mark a playlist recently-played and refresh the list so Home reorders.

@@ -12,7 +12,7 @@ import { NavSearch } from '../Icons'
 
 function greetingText(): string {
   const hr = new Date().getHours()
-  return hr < 11 ? 'Selamat pagi' : hr < 15 ? 'Selamat siang' : hr < 19 ? 'Selamat sore' : 'Selamat malam'
+  return hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening'
 }
 
 function LibraryCard({ song, current, playing, onClick }: { song: BackendSong; current: boolean; playing: boolean; onClick: () => void }) {
@@ -60,6 +60,7 @@ export function HomeView() {
   const library = useSenandung((s) => s.library)
   const history = useSenandung((s) => s.history)
   const home = useSenandung((s) => s.home)
+  const charts = useSenandung((s) => s.charts)
   const playlists = useSenandung((s) => s.playlists)
   const currentId = useSenandung((s) => s.currentId)
   const isPlaying = useSenandung((s) => s.isPlaying)
@@ -83,7 +84,7 @@ export function HomeView() {
 
       {history.length > 0 && (
         <div style={{ marginBottom: '34px' }}>
-          <h2 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 14px' }}>Baru diputar</h2>
+          <h2 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 14px' }}>Recently played</h2>
           <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', margin: '0 -10px' }}>
             {history.map((song) => (
               <RecentCard
@@ -97,28 +98,35 @@ export function HomeView() {
         </div>
       )}
 
+      {charts.map((group) => (
+        <div key={group.region} style={{ marginBottom: '10px' }}>
+          <h2 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 14px' }}>{group.label}</h2>
+          {group.sections.map((section, i) => <BrowseCarousel key={`${section.title}-${i}`} section={section} />)}
+        </div>
+      ))}
+
       {home.map((section, i) => <BrowseCarousel key={`${section.title}-${i}`} section={section} />)}
 
-      {library.length === 0 && history.length === 0 && home.length === 0 && playlists.length === 0 && (
+      {library.length === 0 && history.length === 0 && home.length === 0 && charts.length === 0 && playlists.length === 0 && (
         <div style={{ marginTop: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', color: '#9398a0' }}>
           <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9398a0' }}>
             <NavSearch />
           </div>
-          <div style={{ fontSize: '17px', fontWeight: 600, color: '#e8e9ea', marginTop: '20px' }}>Belum ada lagu</div>
-          <div style={{ fontSize: '13.5px', marginTop: '8px', maxWidth: '320px' }}>Cari lagu di YouTube Music dan sukai untuk menambahkannya ke pustaka.</div>
+          <div style={{ fontSize: '17px', fontWeight: 600, color: '#e8e9ea', marginTop: '20px' }}>No songs yet</div>
+          <div style={{ fontSize: '13.5px', marginTop: '8px', maxWidth: '320px' }}>Search YouTube Music and like a song to add it to your library.</div>
           <Hover
             onClick={() => setView('search')}
             style={{ marginTop: '22px', background: '#f4f5f6', color: '#0b0c0e', fontSize: '14px', fontWeight: 600, padding: '11px 24px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }}
             hover={{ transform: 'scale(1.03)' }}
           >
-            Mulai Mencari
+            Start searching
           </Hover>
         </div>
       )}
 
       {library.length > 0 && (
         <>
-          <h2 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' }}>Pustaka kamu</h2>
+          <h2 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' }}>Your library</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))', gap: '14px' }}>
             {library.map((song) => (
               <LibraryCard

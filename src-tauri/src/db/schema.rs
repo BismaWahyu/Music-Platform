@@ -15,6 +15,14 @@ impl Database {
 
         // Enable foreign keys
         conn.execute("PRAGMA foreign_keys = ON", [])?;
+        // WAL lets reads and writes proceed concurrently (smoother under the background
+        // duration backfill); busy_timeout avoids spurious "database is locked" errors;
+        // NORMAL sync is the safe, fast default for WAL.
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA busy_timeout = 5000;
+             PRAGMA synchronous = NORMAL;",
+        )?;
 
         let db = Database { conn };
         db.init_schema()?;
@@ -253,6 +261,21 @@ impl Database {
                 album_json = excluded.album_json, thumbnail = excluded.thumbnail,
                 duration = excluded.duration",
             rusqlite::params![song.id, song.title, artists_json, album_json, song.thumbnail, song.duration],
+        )?;
+        Ok(())
+    }
+
+    /// Backfill a song's duration in the metadata cache (and library) once it's been
+    /// resolved, so it displays without re-fetching in future sessions.
+    pub fn set_song_duration(&self, song_id: &str, duration: u64) -> SqliteResult<()> {
+        let d = duration as i64;
+        self.conn.execute(
+            "UPDATE songs SET duration = ?1 WHERE id = ?2",
+            rusqlite::params![d, song_id],
+        )?;
+        self.conn.execute(
+            "UPDATE library SET duration = ?1 WHERE song_id = ?2",
+            rusqlite::params![d, song_id],
         )?;
         Ok(())
     }

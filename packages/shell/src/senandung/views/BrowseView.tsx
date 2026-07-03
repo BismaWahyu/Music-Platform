@@ -56,20 +56,20 @@ export function BrowseView() {
 
       <div style={{ position: 'relative', zIndex: 1, padding: '20px 42px 0' }}>
         <Hover onClick={goHome} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#9398a0', cursor: 'pointer' }} hover={{ color: '#e8e9ea' }}>
-          <ChevronLeft size={15} /> Kembali
+          <ChevronLeft size={15} /> Back
         </Hover>
       </div>
 
       {loading && !page ? (
-        <div style={{ position: 'relative', zIndex: 1, padding: '60px 42px', color: '#54585f', fontSize: '14px' }}>Memuat…</div>
+        <div style={{ position: 'relative', zIndex: 1, padding: '60px 42px', color: '#54585f', fontSize: '14px' }}>Loading…</div>
       ) : !page ? (
-        <div style={{ position: 'relative', zIndex: 1, padding: '60px 42px', color: '#54585f', fontSize: '14px' }}>Tidak dapat memuat halaman ini.</div>
+        <div style={{ position: 'relative', zIndex: 1, padding: '60px 42px', color: '#54585f', fontSize: '14px' }}>Couldn't load this page.</div>
       ) : (
         <>
           <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-end', padding: '24px 42px 30px', position: 'relative', zIndex: 1 }}>
             <div style={{ width: '200px', height: '200px', flex: 'none', borderRadius: round ? '50%' : '12px', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.45)', ...cover }} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>{round ? 'Artis' : ref?.kind === 'playlist' ? 'Daftar Putar' : ref?.kind === 'mood' ? 'Mood & Genre' : 'Album'}</div>
+              <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>{round ? 'Artist' : ref?.kind === 'playlist' ? 'Playlist' : ref?.kind === 'mood' ? 'Mood & Genre' : 'Album'}</div>
               <h1 style={{ fontSize: '40px', fontWeight: 800, letterSpacing: '-0.02em', margin: '8px 0 10px', lineHeight: 1.05 }}>{page.title}</h1>
               {page.subtitle && <div style={{ fontSize: '14px', color: '#9398a0' }}>{page.subtitle}</div>}
               {page.songs.length > 0 && (
@@ -78,7 +78,7 @@ export function BrowseView() {
                   style={{ marginTop: '20px', display: 'inline-flex', alignItems: 'center', gap: '9px', background: ACCENT, color: '#0b0c0e', fontSize: '14px', fontWeight: 700, padding: '11px 26px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }}
                   hover={{ transform: 'scale(1.04)' }}
                 >
-                  <PlayTriangle size={13} /> Putar
+                  <PlayTriangle size={13} /> Play
                 </Hover>
               )}
             </div>

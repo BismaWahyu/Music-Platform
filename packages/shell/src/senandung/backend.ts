@@ -167,6 +167,18 @@ export async function getRadio(videoId: string): Promise<BackendSong[]> {
   try { return await invoke<BackendSong[]>('get_radio', { videoId }) } catch (e) { console.error('get_radio failed', e); return [] }
 }
 
+/** Region charts (Indonesia / Global) for the Home page. `region` = "ID" or "ZZ". */
+export async function getCharts(region: string): Promise<BrowseSection[]> {
+  if (!inTauri) return []
+  try { return await invoke<BrowseSection[]>('get_charts', { region }) } catch (e) { console.error('get_charts failed', e); return [] }
+}
+
+/** Resolve a song's duration (seconds) without playing it, cached to the DB. */
+export async function resolveDuration(videoId: string): Promise<number | null> {
+  if (!inTauri) return null
+  try { return await invoke<number | null>('resolve_duration', { videoId }) } catch { return null }
+}
+
 // ==================== Spotify import ====================
 
 export interface SpotifyImportProgress { done: number; total: number; title: string }

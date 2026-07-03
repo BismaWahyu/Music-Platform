@@ -85,6 +85,28 @@ pub async fn get_radio(video_id: String) -> Result<Vec<Song>, String> {
     client.get_radio(&video_id).await.map_err(|e| e.message)
 }
 
+/// Region charts (Indonesia / Global) for the Home page. `region` is a country code
+/// ("ID", "ZZ" for Global). Never hard-fails the Home load: returns an empty list on error.
+#[tauri::command]
+pub async fn get_charts(region: String) -> Result<Vec<BrowseSection>, String> {
+    let client = YouTubeClient::new();
+    Ok(client.get_charts(&region).await.unwrap_or_default())
+}
+
+/// Resolve a song's true duration (via the player response) without committing to playing
+/// it, and cache it to the DB so lists can show durations up-front.
+#[tauri::command]
+pub async fn resolve_duration(video_id: String) -> Result<Option<u64>, String> {
+    let client = YouTubeClient::new();
+    let info = client.get_stream_url(&video_id).await.map_err(|e| e.message)?;
+    if let Some(d) = info.duration {
+        if let Some(db) = get_db().lock().unwrap().as_ref() {
+            let _ = db.set_song_duration(&video_id, d);
+        }
+    }
+    Ok(info.duration)
+}
+
 // ==================== Mini-player window ====================
 
 // Primary-monitor work area (excludes the taskbar), in physical pixels: (left, top, right, bottom).
@@ -139,15 +161,15 @@ pub fn exit_mini_mode(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn import_spotify_playlist(app: tauri::AppHandle, url: String) -> Result<Playlist, String> {
     let sp = crate::api::spotify::fetch_playlist(&url).await.map_err(|e| e.message)?;
-    let description = sp.owner.as_ref().map(|o| format!("Diimpor dari Spotify · {}", o));
+    let description = sp.owner.as_ref().map(|o| format!("Imported from Spotify · {}", o));
     import_tracks(app, &sp.name, description.as_deref(), &sp.tracks).await
 }
 
 #[tauri::command]
 pub async fn import_csv_playlist(app: tauri::AppHandle, name: String, content: String) -> Result<Playlist, String> {
     let tracks = crate::api::spotify::parse_csv_tracks(&content).map_err(|e| e.message)?;
-    let display = if name.trim().is_empty() { "Playlist Impor" } else { name.trim() };
-    import_tracks(app, display, Some("Diimpor dari CSV"), &tracks).await
+    let display = if name.trim().is_empty() { "Imported Playlist" } else { name.trim() };
+    import_tracks(app, display, Some("Imported from CSV"), &tracks).await
 }
 
 /// Shared import pipeline: create a local playlist, resolve each track to a YouTube Music
@@ -190,7 +212,7 @@ async fn import_tracks(
     let db = db_guard.as_ref().ok_or("Database not initialized")?;
     db.get_playlist(&playlist_id)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Gagal memuat playlist hasil impor".to_string())
+        .ok_or_else(|| "Failed to load the imported playlist".to_string())
 }
 
 // ==================== Lyrics ====================

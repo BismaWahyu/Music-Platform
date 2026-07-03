@@ -55,7 +55,7 @@ export function hueFromId(id: string): number {
 }
 
 export function artistName(s: BackendSong): string {
-  return s.artists.map((a) => a.name).filter(Boolean).join(', ') || 'Artis tak dikenal'
+  return s.artists.map((a) => a.name).filter(Boolean).join(', ') || 'Unknown artist'
 }
 
 /** Convert a backend song into a Track and cache it so views can render it by id. */

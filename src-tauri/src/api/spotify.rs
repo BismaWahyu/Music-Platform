@@ -59,11 +59,11 @@ pub async fn fetch_playlist(url: &str) -> Result<SpotifyPlaylist> {
         .map_err(ApiError::from)?;
 
     let json = extract_next_data(&html).ok_or_else(|| ApiError {
-        message: "Gagal membaca data playlist (struktur Spotify mungkin berubah).".to_string(),
+        message: "Couldn't read the playlist data (Spotify's structure may have changed).".to_string(),
         code: None,
     })?;
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| ApiError {
-        message: format!("Gagal mem-parse data Spotify: {}", e),
+        message: format!("Couldn't parse the Spotify data: {}", e),
         code: None,
     })?;
 
@@ -71,7 +71,7 @@ pub async fn fetch_playlist(url: &str) -> Result<SpotifyPlaylist> {
     let name = entity["name"]
         .as_str()
         .or_else(|| entity["title"].as_str())
-        .unwrap_or("Playlist Spotify")
+        .unwrap_or("Spotify Playlist")
         .to_string();
     let owner = entity["subtitle"].as_str().map(|s| s.to_string());
 
@@ -91,7 +91,7 @@ pub async fn fetch_playlist(url: &str) -> Result<SpotifyPlaylist> {
 
     if tracks.is_empty() {
         return Err(ApiError {
-            message: "Tidak ada lagu ditemukan — pastikan playlist publik dan tidak kosong.".to_string(),
+            message: "No songs found — make sure the playlist is public and not empty.".to_string(),
             code: None,
         });
     }
@@ -106,7 +106,7 @@ pub async fn fetch_playlist(url: &str) -> Result<SpotifyPlaylist> {
 pub fn parse_csv_tracks(content: &str) -> Result<Vec<SpotifyTrack>> {
     let rows = parse_csv(content);
     let header = rows.first().ok_or_else(|| ApiError {
-        message: "File CSV kosong.".to_string(),
+        message: "The CSV file is empty.".to_string(),
         code: None,
     })?;
 
@@ -117,7 +117,7 @@ pub fn parse_csv_tracks(content: &str) -> Result<Vec<SpotifyTrack>> {
         })
     };
     let title_i = col(&["Track Name", "Title", "Name", "Song"]).ok_or_else(|| ApiError {
-        message: "CSV tidak punya kolom judul lagu (mis. \"Track Name\").".to_string(),
+        message: "The CSV has no track-name column (e.g. \"Track Name\").".to_string(),
         code: None,
     })?;
     let artist_i = col(&["Artist Name(s)", "Artist Name", "Artist", "Artists"]);
@@ -139,7 +139,7 @@ pub fn parse_csv_tracks(content: &str) -> Result<Vec<SpotifyTrack>> {
 
     if tracks.is_empty() {
         return Err(ApiError {
-            message: "Tidak ada lagu valid di CSV.".to_string(),
+            message: "No valid songs in the CSV.".to_string(),
             code: None,
         });
     }

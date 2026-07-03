@@ -46,16 +46,18 @@ export function SenandungApp() {
   const loadPlaylists = useSenandung((s) => s.loadPlaylists)
   const loadHistory = useSenandung((s) => s.loadHistory)
   const loadHome = useSenandung((s) => s.loadHome)
+  const loadCharts = useSenandung((s) => s.loadCharts)
   const loadMoods = useSenandung((s) => s.loadMoods)
 
-  // Load the user's library + playlists + history + home feed + moods from the backend once.
+  // Load the user's library + playlists + history + home feed + charts + moods once.
   useEffect(() => {
     void loadLibrary()
     void loadPlaylists()
     void loadHistory()
     void loadHome()
+    void loadCharts()
     void loadMoods()
-  }, [loadLibrary, loadPlaylists, loadHistory, loadHome, loadMoods])
+  }, [loadLibrary, loadPlaylists, loadHistory, loadHome, loadCharts, loadMoods])
 
   // Reconcile with real backend playback state (Tauri only; no-op in browser).
   useEffect(() => {

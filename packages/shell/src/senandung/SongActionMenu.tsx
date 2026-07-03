@@ -27,7 +27,7 @@ function Item({ icon, label, onClick, trailing }: { icon: ReactNode; label: stri
   )
 }
 
-function Menu({ song, anchor, onClose, playlistId }: { song: BackendSong; anchor: { x: number; y: number }; onClose: () => void; playlistId?: string }) {
+function Menu({ song, anchor, onClose, playlistId, onRemoveFromQueue }: { song: BackendSong; anchor: { x: number; y: number }; onClose: () => void; playlistId?: string; onRemoveFromQueue?: () => void }) {
   const playlists = useSenandung((s) => s.playlists)
   const liked = useSenandung((s) => !!s.liked[song.id])
   const enqueueNext = useSenandung((s) => s.enqueueNext)
@@ -79,39 +79,40 @@ function Menu({ song, anchor, onClose, playlistId }: { song: BackendSong; anchor
     <div ref={ref} style={wrap} onClick={(e) => e.stopPropagation()}>
       {page === 'main' ? (
         <>
-          <Item icon={<QueueList size={16} />} label="Tambah ke antrean" onClick={() => { enqueueLast(song); onClose() }} />
-          <Item icon={<PlayNextIcon />} label="Putar berikutnya" onClick={() => { enqueueNext(song); onClose() }} />
-          <Item icon={<PlaylistIcon />} label="Tambah ke daftar putar" trailing={<ChevronRight size={15} />} onClick={() => setPage('playlists')} />
-          {playlistId && <Item icon={<span style={{ color: '#f06464', display: 'flex' }}><Trash size={15} /></span>} label="Hapus dari daftar putar" onClick={() => { void removeSongFromPlaylist(playlistId, song.id); onClose() }} />}
+          <Item icon={<QueueList size={16} />} label="Add to queue" onClick={() => { enqueueLast(song); onClose() }} />
+          <Item icon={<PlayNextIcon />} label="Play next" onClick={() => { enqueueNext(song); onClose() }} />
+          {onRemoveFromQueue && <Item icon={<span style={{ color: '#f06464', display: 'flex' }}><Trash size={15} /></span>} label="Remove from queue" onClick={() => { onRemoveFromQueue(); onClose() }} />}
+          <Item icon={<PlaylistIcon />} label="Add to playlist" trailing={<ChevronRight size={15} />} onClick={() => setPage('playlists')} />
+          {playlistId && <Item icon={<span style={{ color: '#f06464', display: 'flex' }}><Trash size={15} /></span>} label="Remove from playlist" onClick={() => { void removeSongFromPlaylist(playlistId, song.id); onClose() }} />}
           {(artistId || albumId) && <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />}
-          {artistId && <Item icon={<ArtistIcon />} label="Buka artis" onClick={() => { void openBrowse('artist', artistId); onClose() }} />}
-          {albumId && <Item icon={<AlbumIcon />} label="Buka album" onClick={() => { void openBrowse('album', albumId); onClose() }} />}
+          {artistId && <Item icon={<ArtistIcon />} label="Go to artist" onClick={() => { void openBrowse('artist', artistId); onClose() }} />}
+          {albumId && <Item icon={<AlbumIcon />} label="Go to album" onClick={() => { void openBrowse('album', albumId); onClose() }} />}
           <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '5px 8px' }} />
           <Item
             icon={liked ? <span style={{ color: ACCENT, display: 'flex' }}><Check /></span> : <Plus />}
-            label={liked ? 'Hapus dari Pustaka' : 'Simpan ke Pustaka'}
+            label={liked ? 'Remove from Library' : 'Save to Library'}
             onClick={() => { void toggleLibrarySong(song); onClose() }}
           />
-          <Item icon={<LinkIcon />} label="Salin tautan" onClick={copyLink} />
+          <Item icon={<LinkIcon />} label="Copy link" onClick={copyLink} />
         </>
       ) : (
         <>
           <div onClick={() => setPage('main')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px 10px', cursor: 'pointer', color: '#9398a0', fontSize: '12px', fontWeight: 600 }}>
-            <ChevronLeft size={15} /> Tambah ke daftar putar
+            <ChevronLeft size={15} /> Add to playlist
           </div>
           <div style={{ display: 'flex', gap: '6px', padding: '0 6px 8px' }}>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') createAndAdd() }}
-              placeholder="Daftar putar baru…"
+              placeholder="New playlist…"
               style={{ flex: 1, minWidth: 0, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 10px', color: '#e8e9ea', fontSize: '13px', outline: 'none' }}
             />
-            <div onClick={createAndAdd} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', background: newName.trim() ? '#f4f5f6' : 'rgba(255,255,255,0.1)', color: newName.trim() ? '#0b0c0e' : '#54585f', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: newName.trim() ? 'pointer' : 'default' }}>Buat</div>
+            <div onClick={createAndAdd} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', background: newName.trim() ? '#f4f5f6' : 'rgba(255,255,255,0.1)', color: newName.trim() ? '#0b0c0e' : '#54585f', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: newName.trim() ? 'pointer' : 'default' }}>Create</div>
           </div>
           <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
             {playlists.length === 0 ? (
-              <div style={{ padding: '10px 12px', fontSize: '12.5px', color: '#54585f' }}>Belum ada daftar putar.</div>
+              <div style={{ padding: '10px 12px', fontSize: '12.5px', color: '#54585f' }}>No playlists yet.</div>
             ) : (
               playlists.map((pl) => (
                 <Item key={pl.id} icon={<PlaylistIcon />} label={pl.name} onClick={() => { void addSongToPlaylist(pl.id, song); onClose() }} />
@@ -126,18 +127,18 @@ function Menu({ song, anchor, onClose, playlistId }: { song: BackendSong; anchor
 
 // Open the song action menu from a right-click. Returns the handler to attach to a row's
 // `onContextMenu` and the menu element to render.
-export function useSongMenu(song: BackendSong, playlistId?: string) {
+export function useSongMenu(song: BackendSong, playlistId?: string, onRemoveFromQueue?: () => void) {
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
   const onContextMenu = (e: ReactMouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setCoords({ x: e.clientX, y: e.clientY })
   }
-  const menu = coords ? createPortal(<Menu song={song} anchor={coords} onClose={() => setCoords(null)} playlistId={playlistId} />, document.body) : null
+  const menu = coords ? createPortal(<Menu song={song} anchor={coords} onClose={() => setCoords(null)} playlistId={playlistId} onRemoveFromQueue={onRemoveFromQueue} />, document.body) : null
   return { onContextMenu, menu }
 }
 
-export function SongActionButton({ song, visible, playlistId }: { song: BackendSong; visible: boolean; playlistId?: string }) {
+export function SongActionButton({ song, visible, playlistId, onRemoveFromQueue }: { song: BackendSong; visible: boolean; playlistId?: string; onRemoveFromQueue?: () => void }) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null)
   const btnRef = useRef<HTMLDivElement>(null)
@@ -157,7 +158,7 @@ export function SongActionButton({ song, visible, playlistId }: { song: BackendS
         onClick={openMenu}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        title="Aksi lainnya"
+        title="More actions"
         style={{
           width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', flex: 'none', color: hover ? '#e8e9ea' : '#9398a0',
@@ -167,7 +168,7 @@ export function SongActionButton({ song, visible, playlistId }: { song: BackendS
       >
         <Kebab />
       </div>
-      {open && coords && createPortal(<Menu song={song} anchor={coords} onClose={() => setOpen(false)} playlistId={playlistId} />, document.body)}
+      {open && coords && createPortal(<Menu song={song} anchor={coords} onClose={() => setOpen(false)} playlistId={playlistId} onRemoveFromQueue={onRemoveFromQueue} />, document.body)}
     </>
   )
 }

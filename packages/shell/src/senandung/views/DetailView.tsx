@@ -8,7 +8,7 @@ import { Hover } from '../Hover'
 import { SongActionButton, useSongMenu } from '../SongActionMenu'
 import { PlaylistCover, coversFromSongs } from '../PlaylistCover'
 import { PlaylistEditDialog } from '../PlaylistEditDialog'
-import { ConfirmDialog } from '../ConfirmDialog'
+import { ConfirmPopover } from '../ConfirmPopover'
 import { AddSongsDialog } from '../AddSongsDialog'
 import { PlayTriangle, ShuffleArrow, EqBars, Pencil, Trash, Plus } from '../Icons'
 
@@ -50,18 +50,18 @@ export function DetailView() {
   const deletePlaylist = useSenandung((s) => s.deletePlaylist)
   const touchPlaylist = useSenandung((s) => s.touchPlaylist)
   const [editOpen, setEditOpen] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAnchor, setConfirmAnchor] = useState<{ x: number; y: number } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
   if (!pl) {
-    const msg = loading ? 'Memuat…' : 'Daftar putar tidak ditemukan.'
+    const msg = loading ? 'Loading…' : 'Playlist not found.'
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#54585f', fontSize: '14px' }}>{msg}</div>
   }
 
   const songs = pl.songs
   const hue = hueFromId(pl.id)
   const totalDur = songs.reduce((a, s) => a + (s.duration ?? 0), 0)
-  const subtitle = `${pl.description ? pl.description + '  ·  ' : ''}${songs.length} lagu${totalDur ? ` · ${fmt(totalDur)}` : ''}`
+  const subtitle = `${pl.description ? pl.description + '  ·  ' : ''}${songs.length} songs${totalDur ? ` · ${fmt(totalDur)}` : ''}`
 
   const glow: CSSProperties = {
     position: 'absolute', top: 0, left: 0, right: 0, height: '460px',
@@ -85,23 +85,23 @@ export function DetailView() {
       <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-end', padding: '42px 42px 30px', position: 'relative', zIndex: 1 }}>
         <PlaylistCover thumbnails={coversFromSongs(songs)} hue={hue} size={220} />
         <div style={{ minWidth: 0, paddingBottom: '6px' }}>
-          <div style={{ fontSize: '10.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>Daftar Putar</div>
+          <div style={{ fontSize: '10.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>Playlist</div>
           <h1 style={{ fontSize: '46px', lineHeight: 1.05, fontWeight: 700, letterSpacing: '-0.03em', margin: '12px 0 0' }}>{pl.name}</h1>
           <div style={{ fontSize: '14px', color: '#9398a0', marginTop: '16px' }}>{subtitle}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '24px' }}>
             {songs.length > 0 && (
               <>
                 <Hover onClick={onPlay} style={{ display: 'flex', alignItems: 'center', gap: '9px', background: '#f4f5f6', color: '#0b0c0e', fontSize: '14px', fontWeight: 600, padding: '11px 24px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.03)' }}>
-                  <PlayTriangle />Putar
+                  <PlayTriangle />Play
                 </Hover>
                 <Hover onClick={onShuffle} style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.14)', color: '#c8cace', fontSize: '13.5px', fontWeight: 500, padding: '10px 20px', borderRadius: '24px', cursor: 'pointer', transition: 'border-color 0.15s,color 0.15s' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#ffffff' }}>
-                  <ShuffleArrow />Acak
+                  <ShuffleArrow />Shuffle
                 </Hover>
               </>
             )}
-            <Hover onClick={() => setAddOpen(true)} title="Tambah lagu" style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.14)', color: '#c8cace', fontSize: '13.5px', fontWeight: 500, padding: '10px 18px', borderRadius: '24px', cursor: 'pointer' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}><Plus />Tambah lagu</Hover>
-            <Hover onClick={() => setEditOpen(true)} title="Edit detail" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c8cace', cursor: 'pointer' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}><Pencil size={17} /></Hover>
-            <Hover onClick={() => setConfirmOpen(true)} title="Hapus daftar putar" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c8cace', cursor: 'pointer' }} hover={{ borderColor: 'oklch(0.6 0.2 25 / 0.6)', color: '#f06464' }}><Trash size={17} /></Hover>
+            <Hover onClick={() => setAddOpen(true)} title="Add songs" style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.14)', color: '#c8cace', fontSize: '13.5px', fontWeight: 500, padding: '10px 18px', borderRadius: '24px', cursor: 'pointer' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}><Plus />Add songs</Hover>
+            <Hover onClick={() => setEditOpen(true)} title="Edit details" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c8cace', cursor: 'pointer' }} hover={{ borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}><Pencil size={17} /></Hover>
+            <Hover onClick={(e) => setConfirmAnchor({ x: e.clientX, y: e.clientY })} title="Delete playlist" style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c8cace', cursor: 'pointer' }} hover={{ borderColor: 'oklch(0.6 0.2 25 / 0.6)', color: '#f06464' }}><Trash size={17} /></Hover>
           </div>
         </div>
       </div>
@@ -109,13 +109,13 @@ export function DetailView() {
       <div style={{ padding: '0 42px', position: 'relative', zIndex: 1 }}>
         {songs.length === 0 ? (
           <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '16px' }}>
-            <div style={{ color: '#54585f', fontSize: '14px' }}>Daftar putar ini masih kosong.</div>
-            <Hover onClick={() => setAddOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f4f5f6', color: '#0b0c0e', fontSize: '14px', fontWeight: 600, padding: '11px 22px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.03)' }}><Plus />Tambah lagu</Hover>
+            <div style={{ color: '#54585f', fontSize: '14px' }}>This playlist is empty.</div>
+            <Hover onClick={() => setAddOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f4f5f6', color: '#0b0c0e', fontSize: '14px', fontWeight: 600, padding: '11px 22px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.03)' }}><Plus />Add songs</Hover>
           </div>
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: '24px 44px 1fr 180px 56px', alignItems: 'center', gap: '14px', padding: '0 12px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '10.5px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>
-              <div style={{ textAlign: 'center' }}>#</div><div></div><div>Judul</div><div>Album</div><div style={{ textAlign: 'right' }}>Durasi</div>
+              <div style={{ textAlign: 'center' }}>#</div><div></div><div>Title</div><div>Album</div><div style={{ textAlign: 'right' }}>Duration</div>
             </div>
             <div style={{ marginTop: '6px' }}>
               {songs.map((song, i) => (
@@ -136,14 +136,15 @@ export function DetailView() {
 
       {addOpen && <AddSongsDialog playlistId={pl.id} playlistName={pl.name} existingIds={songs.map((s) => s.id)} onClose={() => setAddOpen(false)} />}
       {editOpen && <PlaylistEditDialog id={pl.id} name={pl.name} description={pl.description} onClose={() => setEditOpen(false)} />}
-      {confirmOpen && (
-        <ConfirmDialog
-          title="Hapus daftar putar?"
-          message={`"${pl.name}" akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.`}
-          confirmLabel="Hapus"
+      {confirmAnchor && (
+        <ConfirmPopover
+          anchor={confirmAnchor}
+          title="Delete playlist?"
+          message={`"${pl.name}" will be permanently deleted.`}
+          confirmLabel="Delete"
           danger
           onConfirm={() => void deletePlaylist(pl.id)}
-          onClose={() => setConfirmOpen(false)}
+          onClose={() => setConfirmAnchor(null)}
         />
       )}
     </div>

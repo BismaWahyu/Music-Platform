@@ -10,7 +10,7 @@ export function LyricsView() {
   const current = useSenandung((s) => s.current)
   const progress = useSenandung((s) => s.progress)
   const setProgress = useSenandung((s) => s.setProgress)
-  const setView = useSenandung((s) => s.setView)
+  const toggleLyrics = useSenandung((s) => s.toggleLyrics)
   const cur = getTrack(currentId)
 
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
@@ -56,16 +56,16 @@ export function LyricsView() {
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
       <div style={{ maxWidth: '640px', margin: '0 auto', padding: '46px 40px 80px' }}>
-        <Hover onClick={() => setView('nowplaying')} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#9398a0', cursor: 'pointer', marginBottom: '30px' }} hover={{ color: '#e8e9ea' }}>← Kembali</Hover>
-        <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>Lirik{lyrics?.synced ? ' · Sinkron' : ''}</div>
+        <Hover onClick={toggleLyrics} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#9398a0', cursor: 'pointer', marginBottom: '30px' }} hover={{ color: '#e8e9ea' }}>← Back</Hover>
+        <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>Lyrics{lyrics?.synced ? ' · Synced' : ''}</div>
         <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.02em', margin: '8px 0 4px' }}>{cur.title || '—'}</h1>
         <div style={{ fontSize: '14px', color: '#9398a0' }}>{cur.artist}</div>
 
         <div style={{ marginTop: '34px' }}>
           {!currentId ? (
-            <p style={{ fontSize: '16px', color: '#54585f' }}>Tidak ada yang diputar.</p>
+            <p style={{ fontSize: '16px', color: '#54585f' }}>Nothing playing.</p>
           ) : loading ? (
-            <p style={{ fontSize: '16px', color: '#54585f' }}>Memuat lirik…</p>
+            <p style={{ fontSize: '16px', color: '#54585f' }}>Loading lyrics…</p>
           ) : lines && lines.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {lines.map((line, i) => {
@@ -90,7 +90,7 @@ export function LyricsView() {
           ) : lyrics?.text ? (
             <p style={{ fontSize: '17px', color: '#c8cace', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{lyrics.text}</p>
           ) : (
-            <p style={{ fontSize: '16px', color: '#54585f' }}>Lirik belum tersedia untuk lagu ini.</p>
+            <p style={{ fontSize: '16px', color: '#54585f' }}>Lyrics aren't available for this song yet.</p>
           )}
         </div>
       </div>

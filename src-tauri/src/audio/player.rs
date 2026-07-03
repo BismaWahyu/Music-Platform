@@ -318,12 +318,15 @@ impl AudioPlayer {
             Ok(v) => v,
             Err(e) => {
                 *self.is_playing.lock().unwrap() = false;
+                let _ = std::fs::remove_file(&temp_path);
                 return Err(e);
             }
         };
 
         // A newer play may have superseded us during the download/decode window.
         if *self.generation.lock().unwrap() != my_gen {
+            drop(setup); // release the file handle before deleting (Windows locks open files)
+            let _ = std::fs::remove_file(&temp_path);
             return Ok(());
         }
 
@@ -351,6 +354,10 @@ impl AudioPlayer {
                 shared.push(batch);
             }
             shared.done.store(true, Ordering::Release);
+            // The track is fully in memory (or was superseded); the temp file is no longer
+            // needed. Drop the reader first so Windows lets us delete it.
+            drop(setup);
+            let _ = std::fs::remove_file(&temp_path);
         });
 
         Ok(())
@@ -518,8 +525,23 @@ impl AudioPlayer {
 static mut AUDIO_PLAYER: Option<AudioPlayer> = None;
 
 pub fn init_audio_engine(_app_handle: AppHandle) {
+    cleanup_temp_audio(); // remove any `song_*.m4a` left behind by a previous crash
     unsafe {
         AUDIO_PLAYER = Some(AudioPlayer::new().expect("Failed to initialize audio player"));
+    }
+}
+
+/// Delete stray temp audio files from earlier sessions. Files still open by another running
+/// instance can't be removed on Windows, so this is safe to run unconditionally.
+fn cleanup_temp_audio() {
+    if let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("song_") && name.ends_with(".m4a") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
     }
 }
 

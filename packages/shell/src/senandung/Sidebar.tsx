@@ -3,11 +3,13 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSenandung } from './store'
 import type { BackendPlaylist } from './data'
+import { hueFromId } from './data'
 import { ACCENT } from './helpers'
 import { Hover } from './Hover'
 import { ImportDialog } from './ImportDialog'
 import { PlaylistEditDialog } from './PlaylistEditDialog'
-import { ConfirmDialog } from './ConfirmDialog'
+import { ConfirmPopover } from './ConfirmPopover'
+import { PlaylistCover } from './PlaylistCover'
 import { NavHome, NavLibrary, NavExplore, Plus, Kebab, Pencil, Trash } from './Icons'
 
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
@@ -57,14 +59,14 @@ function PlaylistMenu({ anchor, onEdit, onDelete, onClose }: { anchor: { x: numb
   const top = Math.min(anchor.y, window.innerHeight - 110)
   return createPortal(
     <div ref={ref} onClick={(e) => e.stopPropagation()} style={{ position: 'fixed', left, top, width: '172px', zIndex: 1000, background: 'rgba(28,30,38,0.92)', backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '5px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-      <MenuRow icon={<Pencil size={15} />} label="Edit detail" onClick={onEdit} />
-      <MenuRow icon={<Trash size={15} />} label="Hapus" onClick={onDelete} danger />
+      <MenuRow icon={<Pencil size={15} />} label="Edit details" onClick={onEdit} />
+      <MenuRow icon={<Trash size={15} />} label="Delete" onClick={onDelete} danger />
     </div>,
     document.body,
   )
 }
 
-function PlaylistEntry({ pl, active, onOpen, onEdit, onDelete }: { pl: BackendPlaylist; active: boolean; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
+function PlaylistEntry({ pl, active, onOpen, onEdit, onDelete }: { pl: BackendPlaylist; active: boolean; onOpen: () => void; onEdit: () => void; onDelete: (anchor: { x: number; y: number }) => void }) {
   const [hover, setHover] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const btnRef = useRef<HTMLDivElement>(null)
@@ -81,10 +83,11 @@ function PlaylistEntry({ pl, active, onOpen, onEdit, onDelete }: { pl: BackendPl
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY }) }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px 8px 12px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.14s', background: hover ? 'rgba(255,255,255,0.04)' : 'transparent', color: active ? ACCENT : '#a4a8af' }}
+      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px 6px 8px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.14s', background: hover ? 'rgba(255,255,255,0.04)' : 'transparent', color: active ? ACCENT : '#a4a8af' }}
     >
+      <PlaylistCover thumbnails={pl.covers ?? []} hue={hueFromId(pl.id)} size={34} radius="6px" shadow={false} />
       <span style={{ flex: 1, minWidth: 0, fontSize: '13.5px', fontWeight: 450, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</span>
-      <div ref={btnRef} onClick={openMenu} title="Aksi daftar putar" style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', color: '#9398a0', cursor: 'pointer', opacity: hover || menu ? 1 : 0, transition: 'opacity 0.12s' }}>
+      <div ref={btnRef} onClick={openMenu} title="Playlist actions" style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', color: '#9398a0', cursor: 'pointer', opacity: hover || menu ? 1 : 0, transition: 'opacity 0.12s' }}>
         <Kebab size={16} />
       </div>
       {menu && (
@@ -92,7 +95,7 @@ function PlaylistEntry({ pl, active, onOpen, onEdit, onDelete }: { pl: BackendPl
           anchor={menu}
           onClose={() => setMenu(null)}
           onEdit={() => { setMenu(null); onEdit() }}
-          onDelete={() => { setMenu(null); onDelete() }}
+          onDelete={() => { const a = menu; setMenu(null); onDelete(a) }}
         />
       )}
     </div>
@@ -111,7 +114,7 @@ export function Sidebar() {
 
   const [importOpen, setImportOpen] = useState(false)
   const [editPl, setEditPl] = useState<BackendPlaylist | null>(null)
-  const [deletePl, setDeletePl] = useState<BackendPlaylist | null>(null)
+  const [deletePl, setDeletePl] = useState<{ pl: BackendPlaylist; anchor: { x: number; y: number } } | null>(null)
 
   return (
     <div style={{
@@ -121,23 +124,23 @@ export function Sidebar() {
       padding: '18px 12px 14px',
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <NavItem active={view === 'home'} icon={<NavHome />} label="Beranda" onClick={goHome} />
-        <NavItem active={view === 'explore'} icon={<NavExplore />} label="Jelajahi" onClick={() => setView('explore')} />
-        <NavItem active={view === 'library' || view === 'liked'} icon={<NavLibrary />} label="Pustaka" onClick={() => setView('library')} />
+        <NavItem active={view === 'home'} icon={<NavHome />} label="Home" onClick={goHome} />
+        <NavItem active={view === 'explore'} icon={<NavExplore />} label="Explore" onClick={() => setView('explore')} />
+        <NavItem active={view === 'library' || view === 'liked'} icon={<NavLibrary />} label="Library" onClick={() => setView('library')} />
       </div>
 
       <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '16px 8px' }} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px 8px' }}>
-        <span style={{ fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>Daftar Putar</span>
-        <Hover onClick={() => setImportOpen(true)} title="Tambah daftar putar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', cursor: 'pointer', color: '#9398a0' }} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }}><Plus /></Hover>
+        <span style={{ fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>Playlists</span>
+        <Hover onClick={() => setImportOpen(true)} title="Add playlist" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', cursor: 'pointer', color: '#9398a0' }} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }}><Plus /></Hover>
       </div>
 
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1px' }}>
         {playlists.length === 0 ? (
-          <div style={{ padding: '6px 12px', fontSize: '12px', color: '#54585f' }}>Belum ada daftar putar.</div>
+          <div style={{ padding: '6px 12px', fontSize: '12px', color: '#54585f' }}>No playlists yet.</div>
         ) : (
           playlists.map((pl) => (
             <PlaylistEntry
@@ -146,7 +149,7 @@ export function Sidebar() {
               active={view === 'detail' && detail?.id === pl.id}
               onOpen={() => void openPlaylist(pl.id)}
               onEdit={() => setEditPl(pl)}
-              onDelete={() => setDeletePl(pl)}
+              onDelete={(anchor) => setDeletePl({ pl, anchor })}
             />
           ))
         )}
@@ -154,12 +157,13 @@ export function Sidebar() {
 
       {editPl && <PlaylistEditDialog id={editPl.id} name={editPl.name} description={editPl.description} onClose={() => setEditPl(null)} />}
       {deletePl && (
-        <ConfirmDialog
-          title="Hapus daftar putar?"
-          message={`"${deletePl.name}" akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.`}
-          confirmLabel="Hapus"
+        <ConfirmPopover
+          anchor={deletePl.anchor}
+          title="Delete playlist?"
+          message={`"${deletePl.pl.name}" will be permanently deleted.`}
+          confirmLabel="Delete"
           danger
-          onConfirm={() => void deletePlaylist(deletePl.id)}
+          onConfirm={() => void deletePlaylist(deletePl.pl.id)}
           onClose={() => setDeletePl(null)}
         />
       )}
@@ -167,8 +171,8 @@ export function Sidebar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px 2px', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg, oklch(0.6 0.1 242), oklch(0.5 0.08 280))', flex: 'none' }} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Pustaka Lokal</div>
-          <div style={{ fontSize: '10.5px', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>{library.length} lagu</div>
+          <div style={{ fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Local Library</div>
+          <div style={{ fontSize: '10.5px', color: '#54585f', fontFamily: "'JetBrains Mono',monospace" }}>{library.length} songs</div>
         </div>
       </div>
     </div>

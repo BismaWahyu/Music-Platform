@@ -26,19 +26,19 @@ export function LikedView() {
 
       <div style={{ position: 'relative', zIndex: 1, padding: '20px 42px 0' }}>
         <Hover onClick={() => setView('library')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#9398a0', cursor: 'pointer' }} hover={{ color: '#e8e9ea' }}>
-          <ChevronLeft size={15} /> Pustaka
+          <ChevronLeft size={15} /> Library
         </Hover>
       </div>
 
       <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-end', padding: '24px 42px 30px', position: 'relative', zIndex: 1 }}>
         {heart(200)}
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>Koleksi</div>
-          <h1 style={{ fontSize: '46px', lineHeight: 1.05, fontWeight: 800, letterSpacing: '-0.03em', margin: '12px 0 10px' }}>Lagu Disukai</h1>
-          <div style={{ fontSize: '14px', color: '#9398a0' }}>{library.length} lagu{totalDur ? ` · ${fmt(totalDur)}` : ''}</div>
+          <div style={{ fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>Collection</div>
+          <h1 style={{ fontSize: '46px', lineHeight: 1.05, fontWeight: 800, letterSpacing: '-0.03em', margin: '12px 0 10px' }}>Liked Songs</h1>
+          <div style={{ fontSize: '14px', color: '#9398a0' }}>{library.length} songs{totalDur ? ` · ${fmt(totalDur)}` : ''}</div>
           {library.length > 0 && (
             <Hover onClick={() => void playSong(library[0], library)} style={{ marginTop: '20px', display: 'inline-flex', alignItems: 'center', gap: '9px', background: ACCENT, color: '#0b0c0e', fontSize: '14px', fontWeight: 700, padding: '11px 26px', borderRadius: '24px', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.04)' }}>
-              <PlayTriangle size={13} /> Putar
+              <PlayTriangle size={13} /> Play
             </Hover>
           )}
         </div>
@@ -46,7 +46,7 @@ export function LikedView() {
 
       <div style={{ position: 'relative', zIndex: 1, padding: '0 32px' }}>
         {library.length === 0 ? (
-          <div style={{ padding: '24px 12px', color: '#54585f', fontSize: '14px' }}>Belum ada lagu disukai. Sukai lagu dari pemutar untuk menyimpannya di sini.</div>
+          <div style={{ padding: '24px 12px', color: '#54585f', fontSize: '14px' }}>No liked songs yet. Like a song from the player to save it here.</div>
         ) : (
           library.map((song) => {
             const isCur = song.id === currentId

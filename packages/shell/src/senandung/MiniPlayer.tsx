@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useSenandung } from './store'
 import { getTrack } from './data'
-import { ACCENT, stripe, fmt } from './helpers'
+import { stripe, fmt } from './helpers'
 import { Hover } from './Hover'
 import { Slider } from './Slider'
 import { Expand, WinClose, PrevTrack, NextTrack, PauseGlyph, PlayGlyph } from './Icons'
@@ -46,13 +46,13 @@ export function MiniPlayer() {
       ))}
       <div style={{ width: '100%', height: '100%', borderRadius: '8px', display: 'flex', flexDirection: 'column', background: 'rgba(18,20,26,0.82)', backdropFilter: 'blur(60px) saturate(190%)', WebkitBackdropFilter: 'blur(60px) saturate(190%)', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
         <div data-tauri-drag-region style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px 0 14px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', pointerEvents: 'none' }}>
-            <div style={{ width: '11px', height: '11px', borderRadius: '3px', background: ACCENT, transform: 'rotate(45deg)' }} />
-            <span style={{ fontSize: '12px', fontWeight: 600 }}>Senandung</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
+            <img src="/SwayTuneDark.png" alt="" width={17} height={17} style={{ borderRadius: '4px', display: 'block' }} />
+            <span style={{ fontSize: '12px', fontWeight: 600 }}>SwayTune</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Hover onClick={() => setMini(false)} title="Kembali ke jendela penuh" style={chromeBtn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }}><Expand /></Hover>
-            <Hover onClick={winClose} title="Tutup" style={chromeBtn} hover={{ background: '#e23b3b', color: '#fff' }}><WinClose /></Hover>
+            <Hover onClick={() => setMini(false)} title="Back to full window" style={chromeBtn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }}><Expand /></Hover>
+            <Hover onClick={winClose} title="Close" style={chromeBtn} hover={{ background: '#e23b3b', color: '#fff' }}><WinClose /></Hover>
           </div>
         </div>
         <div style={{ flex: 1, minHeight: 0, padding: '14px 22px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -62,7 +62,7 @@ export function MiniPlayer() {
             <div style={{ height: '100%', maxHeight: '210px', aspectRatio: '1 / 1', maxWidth: '100%', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 18px 44px rgba(0,0,0,0.45)', ...coverStyle }} />
           </div>
           <div style={{ textAlign: 'center', marginTop: '14px', width: '100%', flex: 'none' }}>
-            <div style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.title || 'Tidak ada yang diputar'}</div>
+            <div style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.title || 'Nothing playing'}</div>
             <div style={{ fontSize: '13px', color: '#9398a0', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.artist}</div>
           </div>
           <div style={{ width: '100%', marginTop: '14px', flex: 'none' }}>
@@ -72,11 +72,11 @@ export function MiniPlayer() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '26px', marginTop: '14px', flex: 'none' }}>
-            <Hover onClick={prev} title="Sebelumnya" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={20} /></Hover>
-            <Hover onClick={togglePlay} title={isPlaying ? 'Jeda' : 'Putar'} style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
+            <Hover onClick={prev} title="Previous" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={20} /></Hover>
+            <Hover onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'} style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
               {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} />}
             </Hover>
-            <Hover onClick={next} title="Berikutnya" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><NextTrack size={20} /></Hover>
+            <Hover onClick={next} title="Next" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><NextTrack size={20} /></Hover>
           </div>
         </div>
       </div>

@@ -146,6 +146,21 @@ vite.config.ts.timestamp-*
 /src-tauri/target/
 /src-tauri/gen/schemas/
 
+# Build artifacts — never commit compiled binaries, installers, or portable builds.
+# (These already live under src-tauri/target/; also ignore them anywhere they get copied.)
+**/dist/
+*.exe
+*.msi
+*.nsis
+*.app
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+
+# Local tooling / assistant config (not part of the app)
+.claude/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db

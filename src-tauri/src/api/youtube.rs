@@ -265,6 +265,8 @@ struct ItemSection {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MusicShelf {
+    #[serde(default)]
+    title: Option<Text>,
     contents: Option<Vec<ShelfItem>>,
 }
 
@@ -355,6 +357,8 @@ struct ThumbnailData {
 #[serde(rename_all = "camelCase")]
 struct Image {
     url: String,
+    #[serde(default)]
+    width: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -681,12 +685,38 @@ pub struct YouTubeClient {
     client: Client,
 }
 
+// One process-wide reqwest client, reused by every `YouTubeClient::new()`. reqwest clients
+// are internally reference-counted, so cloning shares the same connection pool + TLS
+// sessions — far cheaper than building a fresh client (and TCP/TLS handshake) per request.
+static HTTP_CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+
+fn shared_client() -> Client {
+    HTTP_CLIENT
+        .get_or_init(|| {
+            // Always give requests a timeout: without one, a throttled/blocked request (or a
+            // stalled connection) hangs forever, piling up background tasks and making
+            // playback appear frozen.
+            Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(25))
+                .build()
+                .unwrap_or_else(|_| Client::new())
+        })
+        .clone()
+}
+
 impl YouTubeClient {
     pub fn new() -> Self {
-        Self { client: Client::new() }
+        Self { client: shared_client() }
     }
 
     fn context(&self, c: &YtClient, visitor: &str) -> ContextClient {
+        self.context_gl(c, visitor, "US")
+    }
+
+    /// Like `context`, but with an explicit country code (`gl`) — used to fetch
+    /// region-specific charts (e.g. "ID" for Indonesia, "ZZ" for Global).
+    fn context_gl(&self, c: &YtClient, visitor: &str, gl: &str) -> ContextClient {
         ContextClient {
             client_name: c.client_name.to_string(),
             client_version: c.client_version.to_string(),
@@ -695,7 +725,7 @@ impl YouTubeClient {
             device_make: c.device_make.map(str::to_string),
             device_model: c.device_model.map(str::to_string),
             android_sdk_version: c.android_sdk_version.map(str::to_string),
-            gl: "US".to_string(),
+            gl: gl.to_string(),
             hl: "en".to_string(),
             visitor_data: Some(visitor.to_string()),
         }
@@ -834,6 +864,23 @@ impl YouTubeClient {
     pub async fn get_home(&self) -> Result<Vec<BrowseSection>> {
         let parsed = self.browse("FEmusic_home").await?;
         Ok(parse_browse_sections(section_list_of(&parsed)))
+    }
+
+    /// The YouTube Music charts for a region (`gl`, e.g. "ID" for Indonesia, "ZZ" for
+    /// Global): "Top songs", "Top videos", "Trending", etc. Includes both carousel shelves
+    /// and ranked song shelves.
+    pub async fn get_charts(&self, gl: &str) -> Result<Vec<BrowseSection>> {
+        let visitor = cached_visitor_data(&self.client).await;
+        let body = json!({
+            "context": { "client": self.context_gl(&WEB_REMIX, &visitor, gl) },
+            "browseId": "FEmusic_charts",
+        });
+        let response = self.post("browse", &WEB_REMIX, &visitor, &body).await?;
+        let parsed: BrowseResponse = response.json().await.map_err(|e| ApiError {
+            message: format!("Failed to parse charts response: {}", e),
+            code: None,
+        })?;
+        Ok(parse_chart_sections(section_list_of(&parsed)))
     }
 
     /// An album page: its tracks (directly playable) plus header info.
@@ -1049,15 +1096,27 @@ fn join_runs_text(text: &Option<Text>) -> Option<String> {
     if s.trim().is_empty() { None } else { Some(s) }
 }
 
+/// Pick a sensibly-sized thumbnail rather than the biggest one available: the smallest
+/// that's at least ~480px wide (crisp for cards and the ~300px now-playing cover on HiDPI)
+/// — avoids pulling 1080px+ artwork for tiny list rows. Falls back to the largest when the
+/// JSON carries no widths.
+fn best_thumb(imgs: &[Image]) -> Option<String> {
+    imgs.iter()
+        .filter(|i| i.width.map_or(false, |w| w >= 480))
+        .min_by_key(|i| i.width.unwrap_or(u32::MAX))
+        .or_else(|| imgs.last())
+        .map(|i| i.url.clone())
+}
+
 fn thumbnail_url(t: &Option<Thumbnail>) -> Option<String> {
-    t.as_ref()?
+    let imgs = &t
+        .as_ref()?
         .music_thumbnail_renderer
         .as_ref()?
         .thumbnail
         .as_ref()?
-        .thumbnails
-        .last()
-        .map(|img| img.url.clone())
+        .thumbnails;
+    best_thumb(imgs)
 }
 
 /// Map a two-row card (album/playlist/artist/song) into a BrowseItem.
@@ -1139,6 +1198,64 @@ fn parse_browse_sections(sections: &[BrowseSectionItem]) -> Vec<BrowseSection> {
     out
 }
 
+/// Parse the charts page: like `parse_browse_sections` but also picks up ranked song
+/// shelves (`musicShelfRenderer`, e.g. "Top songs"), which aren't carousels.
+fn parse_chart_sections(sections: &[BrowseSectionItem]) -> Vec<BrowseSection> {
+    let mut out = Vec::new();
+    for section in sections {
+        // Carousel shelves (top videos / artists / trending playlists).
+        if let Some(shelf) = section
+            .music_carousel_shelf_renderer
+            .as_ref()
+            .or(section.music_immersive_carousel_shelf_renderer.as_ref())
+        {
+            let title = shelf
+                .header
+                .as_ref()
+                .and_then(|h| h.music_carousel_shelf_basic_header_renderer.as_ref())
+                .and_then(|h| first_run_text(&h.title))
+                .unwrap_or_default();
+            let mut items = Vec::new();
+            for ci in shelf.contents.iter().flatten() {
+                if let Some(two_row) = ci.music_two_row_item_renderer.as_ref() {
+                    if let Some(bi) = two_row_to_item(two_row) {
+                        items.push(bi);
+                    }
+                } else if let Some(li) = ci.music_responsive_list_item_renderer.as_ref() {
+                    if let Some(bi) = list_item_to_item(li) {
+                        items.push(bi);
+                    }
+                }
+            }
+            if !items.is_empty() {
+                out.push(BrowseSection { title, items });
+            }
+        }
+        // Ranked song shelf (a plain list of tracks, e.g. "Top songs").
+        if let Some(shelf) = section
+            .music_shelf_renderer
+            .as_ref()
+            .or(section.music_playlist_shelf_renderer.as_ref())
+        {
+            let title = first_run_text(&shelf.title).unwrap_or_default();
+            let mut items = Vec::new();
+            for it in shelf.contents.iter().flatten() {
+                if let ShelfItem::ListItem(list_item) = it {
+                    if let Some(r) = list_item.music_responsive_list_item_renderer.as_ref() {
+                        if let Some(bi) = list_item_to_item(r) {
+                            items.push(bi);
+                        }
+                    }
+                }
+            }
+            if !items.is_empty() {
+                out.push(BrowseSection { title, items });
+            }
+        }
+    }
+    out
+}
+
 /// Extract (title, subtitle, thumbnail) from a browse page header.
 fn parse_header(parsed: &BrowseResponse) -> (String, Option<String>, Option<String>) {
     let Some(header) = parsed.header.as_ref() else { return (String::new(), None, None) };
@@ -1153,7 +1270,7 @@ fn parse_header(parsed: &BrowseResponse) -> (String, Option<String>, Option<Stri
     let subtitle = join_runs_text(&hr.subtitle).or_else(|| join_runs_text(&hr.description));
     let thumbnail = hr.thumbnail.as_ref().and_then(|t| {
         let mt = t.music_thumbnail_renderer.as_ref().or(t.cropped_square_thumbnail_renderer.as_ref())?;
-        mt.thumbnail.as_ref()?.thumbnails.last().map(|img| img.url.clone())
+        best_thumb(&mt.thumbnail.as_ref()?.thumbnails)
     });
     (title, subtitle, thumbnail)
 }
@@ -1233,7 +1350,7 @@ fn parse_radio(parsed: NextResponse, seed_id: &str) -> Vec<Song> {
             .and_then(|t| t.runs.as_ref())
             .and_then(|runs| runs.first())
             .and_then(|run| parse_hms(&run.text));
-        let thumbnail = v.thumbnail.as_ref().and_then(|t| t.thumbnails.last()).map(|img| img.url.clone());
+        let thumbnail = v.thumbnail.as_ref().and_then(|t| best_thumb(&t.thumbnails));
         songs.push(Song { id, title, artists, album: None, duration, thumbnail, stream_url: None });
     }
     songs
@@ -1282,8 +1399,7 @@ fn parse_list_renderer(renderer: &ListItemRenderer) -> Option<Song> {
         .as_ref()
         .and_then(|t| t.music_thumbnail_renderer.as_ref())
         .and_then(|mt| mt.thumbnail.as_ref())
-        .and_then(|td| td.thumbnails.last())
-        .map(|img| img.url.clone());
+        .and_then(|td| best_thumb(&td.thumbnails));
 
     // Duration lives in a fixed column as "m:ss" (or "h:mm:ss").
     let duration = renderer.fixed_columns.as_ref().and_then(|cols| {

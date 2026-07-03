@@ -1,11 +1,11 @@
 // Inline-style hover helper — replicates the design's `style-hover` attribute.
 import { useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, MouseEvent as ReactMouseEvent } from 'react'
 
 interface HoverProps {
   style: CSSProperties
   hover: CSSProperties
-  onClick?: () => void
+  onClick?: (e: ReactMouseEvent) => void
   children?: ReactNode
   title?: string
 }

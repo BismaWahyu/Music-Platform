@@ -41,11 +41,11 @@ export function ExploreView() {
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '34px 42px 48px' }}>
-      <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>Jelajahi</h1>
-      <p style={{ fontSize: '14px', color: '#9398a0', margin: '0 0 24px' }}>Mood &amp; genre untuk setiap suasana.</p>
+      <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 4px' }}>Explore</h1>
+      <p style={{ fontSize: '14px', color: '#9398a0', margin: '0 0 24px' }}>Moods &amp; genres for every vibe.</p>
 
       {moods.length === 0 ? (
-        <div style={{ marginTop: '40px', color: '#54585f', fontSize: '14px' }}>Memuat kategori…</div>
+        <div style={{ marginTop: '40px', color: '#54585f', fontSize: '14px' }}>Loading categories…</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(216px,1fr))', gap: '14px' }}>
           {moods.map((cat, i) => (

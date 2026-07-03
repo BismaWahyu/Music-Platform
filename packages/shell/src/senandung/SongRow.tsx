@@ -20,11 +20,12 @@ interface Props {
   playing?: boolean
   onClick?: () => void
   song?: BackendSong
+  onRemoveFromQueue?: () => void
 }
 
-export function SongRow({ hue, thumbnail, thumbSize = 40, title, subtitle, trailing, current, playing, onClick, song }: Props) {
+export function SongRow({ hue, thumbnail, thumbSize = 40, title, subtitle, trailing, current, playing, onClick, song, onRemoveFromQueue }: Props) {
   const [hover, setHover] = useState(false)
-  const { onContextMenu, menu } = useSongMenu(song ?? EMPTY)
+  const { onContextMenu, menu } = useSongMenu(song ?? EMPTY, undefined, onRemoveFromQueue)
   return (
     <div
       onClick={onClick}
@@ -43,7 +44,7 @@ export function SongRow({ hue, thumbnail, thumbSize = 40, title, subtitle, trail
         <div style={{ fontSize: '12.5px', color: '#9398a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>{subtitle}</div>
       </div>
       {trailing}
-      {song && <SongActionButton song={song} visible={hover} />}
+      {song && <SongActionButton song={song} visible={hover} onRemoveFromQueue={onRemoveFromQueue} />}
       {menu}
     </div>
   )
