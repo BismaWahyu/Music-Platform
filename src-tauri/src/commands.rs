@@ -395,6 +395,32 @@ pub fn touch_playlist(playlist_id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Set (Some) or clear (None) a playlist's custom cover image (a data URL or path string).
+#[tauri::command]
+pub fn set_playlist_cover(playlist_id: String, cover: Option<String>) -> Result<(), String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    db.set_playlist_cover(&playlist_id, cover.as_deref()).map_err(|e| e.to_string())
+}
+
+// ==================== Session (resume last playback) ====================
+
+/// Persist the last playback session (current song, position, queue, modes) as JSON.
+#[tauri::command]
+pub fn save_session(session: String) -> Result<(), String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    db.set_setting("session", &session).map_err(|e| e.to_string())
+}
+
+/// Read the last playback session JSON (None if there isn't one).
+#[tauri::command]
+pub fn get_session() -> Result<Option<String>, String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    db.get_setting("session").map_err(|e| e.to_string())
+}
+
 // ==================== Queue Management ====================
 
 #[tauri::command]

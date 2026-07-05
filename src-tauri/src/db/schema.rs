@@ -249,6 +249,15 @@ impl Database {
         Ok(result > 0)
     }
 
+    /// Set (Some) or clear (None → revert to the auto grid cover) a playlist's custom cover.
+    pub fn set_playlist_cover(&self, id: &str, cover: Option<&str>) -> SqliteResult<()> {
+        self.conn.execute(
+            "UPDATE playlists SET thumbnail = ?1 WHERE id = ?2",
+            rusqlite::params![cover, id],
+        )?;
+        Ok(())
+    }
+
     /// Cache a song's metadata so library/playlists/history can reference it.
     pub fn upsert_song(&self, song: &Song) -> SqliteResult<()> {
         let artists_json = serde_json::to_string(&song.artists).unwrap_or_else(|_| "[]".to_string());

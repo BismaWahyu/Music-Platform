@@ -85,7 +85,7 @@ function PlaylistEntry({ pl, active, onOpen, onEdit, onDelete }: { pl: BackendPl
       onMouseLeave={() => setHover(false)}
       style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px 6px 8px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.14s', background: hover ? 'rgba(255,255,255,0.04)' : 'transparent', color: active ? ACCENT : '#a4a8af' }}
     >
-      <PlaylistCover thumbnails={pl.covers ?? []} hue={hueFromId(pl.id)} size={34} radius="6px" shadow={false} />
+      <PlaylistCover thumbnails={pl.covers ?? []} hue={hueFromId(pl.id)} size={34} radius="6px" shadow={false} cover={pl.thumbnail} />
       <span style={{ flex: 1, minWidth: 0, fontSize: '13.5px', fontWeight: 450, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</span>
       <div ref={btnRef} onClick={openMenu} title="Playlist actions" style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '6px', color: '#9398a0', cursor: 'pointer', opacity: hover || menu ? 1 : 0, transition: 'opacity 0.12s' }}>
         <Kebab size={16} />
@@ -155,7 +155,7 @@ export function Sidebar() {
         )}
       </div>
 
-      {editPl && <PlaylistEditDialog id={editPl.id} name={editPl.name} description={editPl.description} onClose={() => setEditPl(null)} />}
+      {editPl && <PlaylistEditDialog id={editPl.id} name={editPl.name} description={editPl.description} covers={editPl.covers ?? []} cover={editPl.thumbnail} onClose={() => setEditPl(null)} />}
       {deletePl && (
         <ConfirmPopover
           anchor={deletePl.anchor}

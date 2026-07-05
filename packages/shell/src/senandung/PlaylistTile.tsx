@@ -26,7 +26,7 @@ export function PlaylistTile({ pl, onClick }: { pl: BackendPlaylist; onClick: ()
     <Tile
       title={pl.name}
       onClick={onClick}
-      cover={<PlaylistCover thumbnails={pl.covers ?? []} hue={hueFromId(pl.id)} size={64} radius="0" shadow={false} />}
+      cover={<PlaylistCover thumbnails={pl.covers ?? []} hue={hueFromId(pl.id)} size={64} radius="0" shadow={false} cover={pl.thumbnail} />}
     />
   )
 }

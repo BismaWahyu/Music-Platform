@@ -68,6 +68,9 @@ fn main() {
             music_platform::commands::update_playlist,
             music_platform::commands::delete_playlist,
             music_platform::commands::touch_playlist,
+            music_platform::commands::set_playlist_cover,
+            music_platform::commands::save_session,
+            music_platform::commands::get_session,
             // Library
             music_platform::commands::add_to_library,
             music_platform::commands::get_library,

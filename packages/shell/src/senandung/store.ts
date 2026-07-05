@@ -11,7 +11,8 @@ import {
   setVolume as beSetVolume, seek as beSeek, addToHistory, getHistorySongs, getLibrary, getPlaylists,
   addToLibrary, removeFromLibrary, addToPlaylist as beAddToPlaylist, removeFromPlaylist as beRemoveFromPlaylist,
   createPlaylist as beCreatePlaylist, updatePlaylist as beUpdatePlaylist, deletePlaylist as beDeletePlaylist,
-  touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist,
+  touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist, setPlaylistCover as beSetPlaylistCover,
+  saveSession as beSaveSession, getSession as beGetSession,
   getHome, getAlbum, getArtist, getMoods, getMood, getMoodCover, getMoodCovers, saveMoodCovers, getRadio,
   getCharts, resolveDuration, getRecommendations, importSpotifyPlaylist, importCsvPlaylist,
   type BackendPlayerState, type BrowseSection, type BrowsePage, type BrowseItem, type BrowseKind,
@@ -83,6 +84,7 @@ interface SenandungState {
   browsePage: BrowsePage | null
   browseLoading: boolean
   online: boolean      // network status (drives the offline indicator)
+  needsResume: boolean // a session was restored but playback hasn't been (re)started yet
   toast: string | null
   _toastSeq: number    // internal: identifies the latest toast for auto-dismiss
   _failStreak: number  // internal: consecutive playback failures (loop guard)
@@ -124,6 +126,9 @@ interface SenandungState {
   importSpotify: (url: string) => Promise<boolean>
   importCsv: (name: string, content: string) => Promise<boolean>
   applyPlayerState: (s: BackendPlayerState) => void
+  saveSession: (force?: boolean) => void
+  loadSession: () => Promise<void>
+  resumePlayback: () => Promise<void>
   togglePlay: () => void
   toggleShuffle: () => void
   setShuffle: (on: boolean) => void
@@ -148,7 +153,7 @@ interface SenandungState {
   removeSongFromPlaylist: (playlistId: string, songId: string) => Promise<void>
   createPlaylist: (name: string) => Promise<void>
   createPlaylistAndAdd: (name: string, song: BackendSong) => Promise<void>
-  updatePlaylist: (id: string, name: string, description: string) => Promise<void>
+  updatePlaylist: (id: string, name: string, description: string, cover: string | null) => Promise<void>
   deletePlaylist: (id: string) => Promise<void>
   touchPlaylist: (id: string) => Promise<void>
   toggleLibrarySong: (song: BackendSong) => Promise<void>
@@ -297,6 +302,10 @@ function pickNext(s: SenandungState, auto: boolean): BackendSong | null {
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 function cancelPreview() { if (previewTimer) { clearTimeout(previewTimer); previewTimer = null } }
 
+// Throttle for periodic session autosave (position updates ~every few seconds).
+let lastSessionSave = 0
+const SESSION_QUEUE_CAP = 200 // bound how many queue songs we persist
+
 // Song ids we've already tried to resolve a duration for this session (success or not),
 // so `ensureDurations` never re-requests the same track.
 const durationTried = new Set<string>()
@@ -369,6 +378,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   browsePage: null,
   browseLoading: false,
   online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+  needsResume: false,
   toast: null,
   _toastSeq: 0,
   _failStreak: 0,
@@ -404,7 +414,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   // one mid-await (which would otherwise desync the displayed song from the audio).
   _playTrack: async (song) => {
     registerSong(song)
-    set({ current: song, currentId: song.id, progress: 0, isPlaying: true })
+    set({ current: song, currentId: song.id, progress: 0, isPlaying: true, needsResume: false })
     if (!inTauri) return
     set({ realMode: true })
     const info = await getStreamUrl(song.id)
@@ -418,6 +428,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       if (!ok) { get().handlePlaybackError(song.id, 'Failed to start playback'); return }
       await addToHistory(song.id)
       void get().loadHistory()
+      get().saveSession(true) // snapshot the new song + queue
     } else {
       get().handlePlaybackError(song.id, 'No stream URL for this song')
     }
@@ -790,12 +801,72 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       // back online.
       ...(s.is_playing && (s.position_ms ?? 0) > 500 ? { _failStreak: 0, online: true } : {}),
     })
+    get().saveSession() // throttled — keeps the saved position roughly current
+  },
+
+  // Persist the current playback session so it can be resumed after the app is reopened.
+  // Throttled unless `force` (e.g. a song change) to avoid churning the DB on every tick.
+  saveSession: (force) => {
+    if (!inTauri) return
+    const s = get()
+    if (!s.current) return
+    const now = Date.now()
+    if (!force && now - lastSessionSave < 3000) return
+    lastSessionSave = now
+    const cap = (a: BackendSong[]) => a.slice(0, SESSION_QUEUE_CAP)
+    const snapshot = {
+      current: s.current, progress: s.progress,
+      queue: cap(s.queue), queueOriginal: cap(s.queueOriginal), userQueue: cap(s.userQueue),
+      ctxId: s.ctxId, contextLabel: s.contextLabel,
+      shuffleMode: s.shuffleMode, repeat: s.repeat, volume: s.volume,
+      smartEligible: s.smartEligible, smartKey: s.smartKey, smartAddTargetId: s.smartAddTargetId,
+    }
+    void beSaveSession(JSON.stringify(snapshot))
+  },
+
+  // Restore the last session on startup: load the song, position, queue, and modes WITHOUT
+  // auto-playing (Spotify-style). Playback resumes at the saved position when the user hits
+  // play (see resumePlayback).
+  loadSession: async () => {
+    if (!inTauri) return
+    const raw = await beGetSession()
+    if (!raw) return
+    let snap: any
+    try { snap = JSON.parse(raw) } catch { return }
+    if (!snap?.current?.id || get().currentId) return // nothing to restore, or already playing
+    const lists: BackendSong[] = [snap.current, ...(snap.queue ?? []), ...(snap.queueOriginal ?? []), ...(snap.userQueue ?? [])]
+    lists.forEach((x) => x && registerSong(x))
+    set({
+      current: snap.current, currentId: snap.current.id, progress: snap.progress || 0,
+      queue: snap.queue ?? [], queueOriginal: snap.queueOriginal ?? [], userQueue: snap.userQueue ?? [],
+      ctxId: snap.ctxId ?? snap.current.id, contextLabel: snap.contextLabel ?? '',
+      shuffleMode: snap.shuffleMode ?? 'off', repeat: snap.repeat ?? 'off',
+      smartEligible: !!snap.smartEligible, smartKey: snap.smartKey ?? '', smartAddTargetId: snap.smartAddTargetId ?? '',
+      isPlaying: false, needsResume: true, realMode: false,
+    })
+    if (typeof snap.volume === 'number') get().setVolume(snap.volume)
+  },
+
+  // Start real playback of the restored song and seek back to where it left off (best-effort:
+  // the seek fires after decode has had a moment to catch up).
+  resumePlayback: async () => {
+    const cur = get().current
+    if (!cur) return
+    const pos = get().progress
+    set({ needsResume: false })
+    await get()._playTrack(cur)
+    if (pos > 2 && get().currentId === cur.id) {
+      setTimeout(() => { if (get().currentId === cur.id) get().setProgress(pos) }, 1200)
+    }
   },
 
   togglePlay: () => {
     if (!get().currentId) return
+    // First press after restoring a session → start + seek to the saved position.
+    if (get().needsResume) { void get().resumePlayback(); return }
     set((s) => ({ isPlaying: !s.isPlaying }))
     if (get().realMode) void bePlayPause()
+    get().saveSession(true)
   },
   // Cycle Off → Shuffle → Smart Shuffle → Off (Smart is skipped when the context can't
   // support it, e.g. search results / radio).
@@ -881,7 +952,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       }
     }
   },
-  toggleRepeat: () => set((s) => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
+  toggleRepeat: () => { set((s) => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })); get().saveSession(true) },
   toggleQueue: () => set((s) => ({ queueOpen: !s.queueOpen })),
 
   // Mute/unmute: drop the volume to 0, remembering the previous level to restore on unmute.
@@ -1009,8 +1080,9 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     void get().loadPlaylists()
   },
 
-  updatePlaylist: async (id, name, description) => {
+  updatePlaylist: async (id, name, description, cover) => {
     await beUpdatePlaylist(id, name, description)
+    await beSetPlaylistCover(id, cover) // Some = custom image, null = revert to grid
     await get().loadPlaylists()
     if (get().detail?.id === id) void get().reloadDetailPlaylist()
     get().showToast('Playlist updated.')

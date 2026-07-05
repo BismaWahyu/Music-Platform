@@ -262,6 +262,22 @@ export async function touchPlaylist(playlistId: string): Promise<void> {
   if (inTauri) { try { await invoke('touch_playlist', { playlistId }) } catch (e) { console.error(e) } }
 }
 
+/** Set (string) or clear (null → revert to grid) a playlist's custom cover. */
+export async function setPlaylistCover(playlistId: string, cover: string | null): Promise<void> {
+  if (inTauri) { try { await invoke('set_playlist_cover', { playlistId, cover }) } catch (e) { console.error(e) } }
+}
+
+// ==================== Session (resume last playback) ====================
+
+export async function saveSession(session: string): Promise<void> {
+  if (inTauri) { try { await invoke('save_session', { session }) } catch (e) { console.error(e) } }
+}
+
+export async function getSession(): Promise<string | null> {
+  if (!inTauri) return null
+  try { return await invoke<string | null>('get_session') } catch { return null }
+}
+
 /** Subscribe to backend player-state updates. Returns an unsubscribe fn. */
 export async function onPlayerState(cb: (s: BackendPlayerState) => void): Promise<() => void> {
   if (!inTauri) return () => {}

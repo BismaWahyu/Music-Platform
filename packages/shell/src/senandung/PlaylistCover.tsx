@@ -16,9 +16,9 @@ export function coversFromSongs(songs: BackendSong[]): string[] {
   return out
 }
 
-// A playlist cover built from song artwork: a 2×2 mosaic when ≥4 covers exist, a single
-// cover for 1–3, else the striped placeholder.
-export function PlaylistCover({ thumbnails, hue, size, radius = '22px', shadow = true }: { thumbnails: string[]; hue: number; size: number; radius?: string; shadow?: boolean }) {
+// A playlist cover: a custom uploaded image if set, else built from song artwork (a 2×2
+// mosaic when ≥4 covers exist, a single cover for 1–3), else the striped placeholder.
+export function PlaylistCover({ thumbnails, hue, size, radius = '22px', shadow = true, cover }: { thumbnails: string[]; hue: number; size: number; radius?: string; shadow?: boolean; cover?: string | null }) {
   const thumbs = thumbnails.slice(0, 4)
 
   const base: CSSProperties = {
@@ -27,6 +27,11 @@ export function PlaylistCover({ thumbnails, hue, size, radius = '22px', shadow =
     ...(shadow ? { boxShadow: '0 26px 64px rgba(0,0,0,0.5)' } : {}),
   }
   const img = (url: string): CSSProperties => ({ backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' })
+
+  // A custom cover overrides the auto grid.
+  if (cover) {
+    return <div style={{ ...base, ...img(cover) }} />
+  }
 
   if (thumbs.length >= 4) {
     return (

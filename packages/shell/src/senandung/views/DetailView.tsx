@@ -91,7 +91,7 @@ export function DetailView() {
     <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 0 40px', position: 'relative' }}>
       <div style={glow} />
       <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-end', padding: '42px 42px 30px', position: 'relative', zIndex: 1 }}>
-        <PlaylistCover thumbnails={coversFromSongs(songs)} hue={hue} size={220} />
+        <PlaylistCover thumbnails={coversFromSongs(songs)} hue={hue} size={220} cover={pl.thumbnail} />
         <div style={{ minWidth: 0, paddingBottom: '6px' }}>
           <div style={{ fontSize: '10.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9398a0', fontFamily: "'JetBrains Mono',monospace" }}>Playlist</div>
           <h1 style={{ fontSize: '46px', lineHeight: 1.05, fontWeight: 700, letterSpacing: '-0.03em', margin: '12px 0 0' }}>{pl.name}</h1>
@@ -143,7 +143,7 @@ export function DetailView() {
       </div>
 
       {addOpen && <AddSongsDialog playlistId={pl.id} playlistName={pl.name} existingIds={songs.map((s) => s.id)} onClose={() => setAddOpen(false)} />}
-      {editOpen && <PlaylistEditDialog id={pl.id} name={pl.name} description={pl.description} onClose={() => setEditOpen(false)} />}
+      {editOpen && <PlaylistEditDialog id={pl.id} name={pl.name} description={pl.description} covers={coversFromSongs(pl.songs)} cover={pl.thumbnail} onClose={() => setEditOpen(false)} />}
       {confirmAnchor && (
         <ConfirmPopover
           anchor={confirmAnchor}
