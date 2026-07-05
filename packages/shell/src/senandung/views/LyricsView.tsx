@@ -4,6 +4,7 @@ import { getTrack, artistName } from '../data'
 import { ACCENT } from '../helpers'
 import { Hover } from '../Hover'
 import { getLyrics, type LyricsResult } from '../backend'
+import { SkLyrics } from '../Skeleton'
 
 export function LyricsView() {
   const currentId = useSenandung((s) => s.currentId)
@@ -65,7 +66,7 @@ export function LyricsView() {
           {!currentId ? (
             <p style={{ fontSize: '16px', color: '#54585f' }}>Nothing playing.</p>
           ) : loading ? (
-            <p style={{ fontSize: '16px', color: '#54585f' }}>Loading lyrics…</p>
+            <SkLyrics />
           ) : lines && lines.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {lines.map((line, i) => {

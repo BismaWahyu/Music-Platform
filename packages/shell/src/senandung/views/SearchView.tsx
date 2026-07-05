@@ -2,6 +2,7 @@ import { useSenandung } from '../store'
 import { artistName, hueFromId } from '../data'
 import { fmt } from '../helpers'
 import { SongRow } from '../SongRow'
+import { SkList, SkBox } from '../Skeleton'
 
 export function SearchView() {
   const query = useSenandung((s) => s.query)
@@ -24,7 +25,10 @@ export function SearchView() {
       )}
 
       {q !== '' && isSearching && (
-        <div style={{ marginTop: '48px', textAlign: 'center', color: '#54585f', fontSize: '14px' }}>Searching…</div>
+        <div style={{ marginTop: '32px' }}>
+          <SkBox w={54} h={13} r={5} style={{ margin: '0 0 14px' }} />
+          <SkList rows={8} />
+        </div>
       )}
 
       {q !== '' && !isSearching && results.length === 0 && (

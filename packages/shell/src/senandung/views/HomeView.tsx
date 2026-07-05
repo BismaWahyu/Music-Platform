@@ -9,6 +9,7 @@ import { SongActionButton, useSongMenu } from '../SongActionMenu'
 import { BrowseCarousel } from '../Browse'
 import { PlaylistTile } from '../PlaylistTile'
 import { NavSearch } from '../Icons'
+import { SkCarousel } from '../Skeleton'
 
 function greetingText(): string {
   const hr = new Date().getHours()
@@ -60,6 +61,7 @@ export function HomeView() {
   const library = useSenandung((s) => s.library)
   const history = useSenandung((s) => s.history)
   const home = useSenandung((s) => s.home)
+  const homeLoading = useSenandung((s) => s.homeLoading)
   const charts = useSenandung((s) => s.charts)
   const playlists = useSenandung((s) => s.playlists)
   const currentId = useSenandung((s) => s.currentId)
@@ -107,7 +109,14 @@ export function HomeView() {
 
       {home.map((section, i) => <BrowseCarousel key={`${section.title}-${i}`} section={section} />)}
 
-      {library.length === 0 && history.length === 0 && home.length === 0 && charts.length === 0 && playlists.length === 0 && (
+      {homeLoading && home.length === 0 && (
+        <>
+          <SkCarousel />
+          <SkCarousel />
+        </>
+      )}
+
+      {!homeLoading && library.length === 0 && history.length === 0 && home.length === 0 && charts.length === 0 && playlists.length === 0 && (
         <div style={{ marginTop: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', color: '#9398a0' }}>
           <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9398a0' }}>
             <NavSearch />

@@ -6,6 +6,7 @@ import { artistName, hueFromId } from './data'
 import type { BackendSong } from './data'
 import { ACCENT, coverThumbFor, fmt } from './helpers'
 import { Plus, Check, NavSearch, WinClose, PlayGlyph, PauseGlyph } from './Icons'
+import { SkList } from './Skeleton'
 
 // Search YouTube Music and add results to a playlist. Stays open so several songs can be
 // added in a row; already-present songs show as added.
@@ -71,7 +72,7 @@ export function AddSongsDialog({ playlistId, playlistName, existingIds, onClose 
           {q === '' ? (
             <div style={{ padding: '40px 12px', textAlign: 'center', color: '#54585f', fontSize: '13.5px' }}>Type to search for songs.</div>
           ) : searching ? (
-            <div style={{ padding: '40px 12px', textAlign: 'center', color: '#54585f', fontSize: '13.5px' }}>Searching…</div>
+            <SkList rows={6} thumb={42} />
           ) : results.length === 0 ? (
             <div style={{ padding: '40px 12px', textAlign: 'center', color: '#54585f', fontSize: '13.5px' }}>No results.</div>
           ) : (

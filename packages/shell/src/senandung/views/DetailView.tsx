@@ -10,6 +10,7 @@ import { PlaylistCover, coversFromSongs } from '../PlaylistCover'
 import { PlaylistEditDialog } from '../PlaylistEditDialog'
 import { ConfirmPopover } from '../ConfirmPopover'
 import { AddSongsDialog } from '../AddSongsDialog'
+import { SkDetailHeader, SkList } from '../Skeleton'
 import { PlayTriangle, ShuffleArrow, EqBars, Pencil, Trash, Plus } from '../Icons'
 
 function DetailRow({ song, index, current, playing, onClick, playlistId }: { song: BackendSong; index: number; current: boolean; playing: boolean; onClick: () => void; playlistId: string }) {
@@ -54,8 +55,15 @@ export function DetailView() {
   const [addOpen, setAddOpen] = useState(false)
 
   if (!pl) {
-    const msg = loading ? 'Loading…' : 'Playlist not found.'
-    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#54585f', fontSize: '14px' }}>{msg}</div>
+    if (loading) {
+      return (
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 0 40px' }}>
+          <SkDetailHeader />
+          <div style={{ padding: '0 42px' }}><SkList rows={8} /></div>
+        </div>
+      )
+    }
+    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#54585f', fontSize: '14px' }}>Playlist not found.</div>
   }
 
   const songs = pl.songs

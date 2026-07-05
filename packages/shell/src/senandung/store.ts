@@ -75,6 +75,7 @@ interface SenandungState {
   detailLoading: boolean
   history: BackendSong[]
   home: BrowseSection[]
+  homeLoading: boolean
   charts: ChartGroup[]
   moods: MoodCategory[]
   moodCovers: Record<string, string>  // browseId → representative cover url
@@ -360,6 +361,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   detailLoading: false,
   history: [],
   home: [],
+  homeLoading: true,
   charts: [],
   moods: [],
   moodCovers: {},
@@ -559,7 +561,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     home.forEach((sec) => sec.items.forEach((it) => {
       if (it.kind === 'song') registerSong(browseItemToSong(it))
     }))
-    set({ home })
+    set({ home, homeLoading: false })
   },
 
   // Fetch region charts (Indonesia + Global) for the Home page. Best-effort: a region that

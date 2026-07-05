@@ -7,6 +7,7 @@ import { Hover } from '../Hover'
 import { SongActionButton, useSongMenu } from '../SongActionMenu'
 import { BrowseCarousel } from '../Browse'
 import { PlayTriangle, EqBars, ChevronLeft } from '../Icons'
+import { SkDetailHeader, SkList } from '../Skeleton'
 
 function TrackRow({ song, index, current, playing, onClick }: { song: BackendSong; index: number; current: boolean; playing: boolean; onClick: () => void }) {
   const [hover, setHover] = useState(false)
@@ -61,7 +62,10 @@ export function BrowseView() {
       </div>
 
       {loading && !page ? (
-        <div style={{ position: 'relative', zIndex: 1, padding: '60px 42px', color: '#54585f', fontSize: '14px' }}>Loading…</div>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <SkDetailHeader round={round} />
+          <div style={{ padding: '0 32px' }}><SkList rows={8} /></div>
+        </div>
       ) : !page ? (
         <div style={{ position: 'relative', zIndex: 1, padding: '60px 42px', color: '#54585f', fontSize: '14px' }}>Couldn't load this page.</div>
       ) : (

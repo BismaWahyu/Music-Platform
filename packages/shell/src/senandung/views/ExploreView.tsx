@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSenandung, moodKey } from '../store'
 import { ACCENT } from '../helpers'
 import type { MoodCategory } from '../backend'
+import { SkMoodGrid } from '../Skeleton'
 
 function MoodCard({ cat, cover, onClick }: { cat: MoodCategory; cover?: string; onClick: () => void }) {
   const [hover, setHover] = useState(false)
@@ -45,7 +46,7 @@ export function ExploreView() {
       <p style={{ fontSize: '14px', color: '#9398a0', margin: '0 0 24px' }}>Moods &amp; genres for every vibe.</p>
 
       {moods.length === 0 ? (
-        <div style={{ marginTop: '40px', color: '#54585f', fontSize: '14px' }}>Loading categories…</div>
+        <SkMoodGrid />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(216px,1fr))', gap: '14px' }}>
           {moods.map((cat, i) => (
