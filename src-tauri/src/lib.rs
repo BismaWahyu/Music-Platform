@@ -9,6 +9,8 @@ pub mod api;
 pub mod audio;
 pub mod db;
 pub mod commands;
+#[cfg(windows)]
+pub mod taskbar;
 
 // ==================== Models ====================
 

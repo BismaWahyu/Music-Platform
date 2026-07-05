@@ -83,3 +83,11 @@ tauri-plugin-shell = "2"
 # corner gaps.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging"] }
+# Taskbar thumbnail toolbar (Prev / Play-Pause / Next on the taskbar preview). Uses the
+# higher-level `windows` crate (already in the tree via Tauri) for COM (ITaskbarList3).
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }

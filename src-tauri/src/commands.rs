@@ -403,6 +403,22 @@ pub fn set_playlist_cover(playlist_id: String, cover: Option<String>) -> Result<
     db.set_playlist_cover(&playlist_id, cover.as_deref()).map_err(|e| e.to_string())
 }
 
+// ==================== Taskbar media controls (Windows) ====================
+
+/// Reflect the play/pause state on the taskbar thumbnail toolbar button.
+#[cfg(windows)]
+#[tauri::command]
+pub fn set_media_playing(playing: bool) -> Result<(), String> {
+    crate::taskbar::set_playing(playing);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn set_media_playing(_playing: bool) -> Result<(), String> {
+    Ok(())
+}
+
 // ==================== Session (resume last playback) ====================
 
 /// Persist the last playback session (current song, position, queue, modes) as JSON.

@@ -302,6 +302,23 @@ export async function onSongEnded(cb: () => void): Promise<() => void> {
   }
 }
 
+/** Reflect play/pause on the taskbar thumbnail toolbar (Windows). */
+export async function setMediaPlaying(playing: boolean): Promise<void> {
+  if (inTauri) { try { await invoke('set_media_playing', { playing }) } catch (e) { console.error(e) } }
+}
+
+/** Subscribe to taskbar media-button clicks ("prev" | "playpause" | "next"). */
+export async function onMediaControl(cb: (action: string) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  try {
+    const { listen } = await import('@tauri-apps/api/event')
+    return await listen<string>('media-control', (e) => cb(e.payload))
+  } catch (e) {
+    console.error('listen media-control failed', e)
+    return () => {}
+  }
+}
+
 export interface PlaybackError { songId: string; message: string; kind?: string }
 
 /** Fires when a track fails to download/decode. Returns an unsubscribe fn. */

@@ -69,6 +69,7 @@ fn main() {
             music_platform::commands::delete_playlist,
             music_platform::commands::touch_playlist,
             music_platform::commands::set_playlist_cover,
+            music_platform::commands::set_media_playing,
             music_platform::commands::save_session,
             music_platform::commands::get_session,
             // Library
@@ -103,10 +104,14 @@ fn main() {
                 });
             }
 
-            // Round the (borderless, transparent) window corners on Windows 11.
+            // Round the (borderless, transparent) window corners on Windows 11, and add the
+            // taskbar thumbnail media controls (Prev / Play-Pause / Next).
             #[cfg(windows)]
             if let Some(win) = app.get_webview_window("main") {
                 round_window_corners(&win);
+                if let Ok(hwnd) = win.hwnd() {
+                    music_platform::taskbar::init(&app.handle().clone(), hwnd.0 as isize);
+                }
             }
             Ok(())
         })

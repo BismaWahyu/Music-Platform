@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useSenandung } from './store'
-import { onPlayerState, onSongEnded, onPlaybackError, onSpotifyImportProgress } from './backend'
+import { onPlayerState, onSongEnded, onPlaybackError, onSpotifyImportProgress, onMediaControl, setMediaPlaying } from './backend'
 import { TitleBar } from './TitleBar'
 import { Toast } from './Toast'
 import { Sidebar } from './Sidebar'
@@ -43,6 +43,11 @@ export function SenandungApp() {
   const handlePlaybackError = useSenandung((s) => s.handlePlaybackError)
   const setOnline = useSenandung((s) => s.setOnline)
   const setImportProgress = useSenandung((s) => s.setImportProgress)
+  const next = useSenandung((s) => s.next)
+  const prev = useSenandung((s) => s.prev)
+  const togglePlay = useSenandung((s) => s.togglePlay)
+  const isPlaying = useSenandung((s) => s.isPlaying)
+  const currentId = useSenandung((s) => s.currentId)
   const loadLibrary = useSenandung((s) => s.loadLibrary)
   const loadPlaylists = useSenandung((s) => s.loadPlaylists)
   const loadHistory = useSenandung((s) => s.loadHistory)
@@ -100,6 +105,20 @@ export function SenandungApp() {
     onSpotifyImportProgress(setImportProgress).then((fn) => { unlisten = fn })
     return () => unlisten()
   }, [setImportProgress])
+
+  // Taskbar thumbnail media buttons (Windows): map clicks to transport actions.
+  useEffect(() => {
+    let unlisten = () => {}
+    onMediaControl((action) => {
+      if (action === 'prev') prev()
+      else if (action === 'next') next()
+      else togglePlay()
+    }).then((fn) => { unlisten = fn })
+    return () => unlisten()
+  }, [prev, next, togglePlay])
+
+  // Keep the taskbar play/pause button in sync with playback.
+  useEffect(() => { void setMediaPlaying(isPlaying) }, [isPlaying, currentId])
 
   if (miniMode) return <MiniPlayer />
 
