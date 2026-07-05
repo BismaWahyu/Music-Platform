@@ -860,6 +860,42 @@ impl YouTubeClient {
         Ok(parse_radio(parsed, video_id))
     }
 
+    /// Recommendations that fit a set of seed tracks (a playlist's "vibe"): fetch radio for
+    /// each seed, merge, and rank by how many seeds surface each track (overlap = closer to
+    /// the playlist's centre). Excludes `exclude_ids` (the playlist itself + what's queued).
+    /// Seeds are fetched sequentially to stay gentle on the network.
+    pub async fn get_recommendations(
+        &self,
+        seed_ids: &[String],
+        exclude_ids: &[String],
+        limit: usize,
+    ) -> Result<Vec<Song>> {
+        use std::collections::{HashMap, HashSet};
+        let exclude: HashSet<&str> = exclude_ids.iter().map(|s| s.as_str()).collect();
+        // id → (overlap count, first-seen order, Song)
+        let mut scored: HashMap<String, (u32, usize, Song)> = HashMap::new();
+        let mut order = 0usize;
+        for seed in seed_ids {
+            let radio = self.get_radio(seed).await.unwrap_or_default();
+            for song in radio {
+                if exclude.contains(song.id.as_str()) {
+                    continue;
+                }
+                match scored.get_mut(&song.id) {
+                    Some(entry) => entry.0 += 1,
+                    None => {
+                        scored.insert(song.id.clone(), (1, order, song));
+                        order += 1;
+                    }
+                }
+            }
+        }
+        let mut ranked: Vec<(u32, usize, Song)> = scored.into_values().collect();
+        // Higher overlap first; ties keep discovery order (stable, deterministic).
+        ranked.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        Ok(ranked.into_iter().take(limit).map(|(_, _, s)| s).collect())
+    }
+
     /// The YouTube Music home feed as a list of carousel sections.
     pub async fn get_home(&self) -> Result<Vec<BrowseSection>> {
         let parsed = self.browse("FEmusic_home").await?;

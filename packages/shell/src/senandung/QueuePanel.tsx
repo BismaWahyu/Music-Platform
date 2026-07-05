@@ -6,16 +6,32 @@ import { ACCENT } from './helpers'
 import { Hover } from './Hover'
 import { SongThumb } from './SongThumb'
 import { SongRow } from './SongRow'
-import { WinClose } from './Icons'
+import { WinClose, Plus } from './Icons'
 
 const label = {
   fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase' as const,
   color: '#54585f', fontFamily: "'JetBrains Mono',monospace",
 }
 
+// Trailing marker for a Smart Shuffle recommendation: a sparkle, plus (when the context is
+// a playlist) a quick button to add the rec to that playlist.
+function RecTrailing({ onAdd }: { onAdd?: () => void }) {
+  return (
+    <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span title="Recommended for this playlist" style={{ display: 'flex', color: ACCENT }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.7 5.1L19 9l-5.3 1.9L12 16l-1.7-5.1L5 9l5.3-1.9z" /></svg>
+      </span>
+      {onAdd && (
+        <div onClick={(e) => { e.stopPropagation(); onAdd() }} title="Add to this playlist" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', cursor: 'pointer', color: '#c8cace', border: '1px solid rgba(255,255,255,0.16)' }}><Plus /></div>
+      )}
+    </span>
+  )
+}
+
 // A draggable list of songs (used for both the user queue and the context queue). `onMove`
-// reorders by index within this list; `onPlay` plays the clicked song.
-function DraggableList({ songs, onPlay, onMove, onRemove }: { songs: BackendSong[]; onPlay: (i: number) => void; onMove: (from: number, to: number) => void; onRemove: (i: number) => void }) {
+// reorders by index within this list; `onPlay` plays the clicked song. `recIds` marks
+// Smart Shuffle recommendations with a sparkle.
+function DraggableList({ songs, onPlay, onMove, onRemove, recIds, onAddRec }: { songs: BackendSong[]; onPlay: (i: number) => void; onMove: (from: number, to: number) => void; onRemove: (i: number) => void; recIds?: Record<string, true>; onAddRec?: (song: BackendSong) => void }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
   return (
@@ -33,7 +49,7 @@ function DraggableList({ songs, onPlay, onMove, onRemove }: { songs: BackendSong
             onDragEnd={() => { setDragIdx(null); setOverIdx(null) }}
             style={{ cursor: 'grab', opacity: dragging ? 0.4 : 1, borderTop: overIdx === i && dragIdx !== null && !dragging ? `2px solid ${ACCENT}` : '2px solid transparent' }}
           >
-            <SongRow hue={t.hue} thumbnail={t.thumbnail} title={t.title} subtitle={t.artist} onClick={() => onPlay(i)} song={song} onRemoveFromQueue={() => onRemove(i)} />
+            <SongRow hue={t.hue} thumbnail={t.thumbnail} title={t.title} subtitle={t.artist} onClick={() => onPlay(i)} song={song} onRemoveFromQueue={() => onRemove(i)} trailing={recIds && recIds[song.id] ? <RecTrailing onAdd={onAddRec ? () => onAddRec(song) : undefined} /> : undefined} />
           </div>
         )
       })}
@@ -48,6 +64,10 @@ export function QueuePanel() {
   const queue = useSenandung((s) => s.queue)
   const ctxId = useSenandung((s) => s.ctxId)
   const contextLabel = useSenandung((s) => s.contextLabel)
+  const shuffleMode = useSenandung((s) => s.shuffleMode)
+  const smartRecIds = useSenandung((s) => s.smartRecIds)
+  const smartAddTargetId = useSenandung((s) => s.smartAddTargetId)
+  const addSongToPlaylist = useSenandung((s) => s.addSongToPlaylist)
   const userQueue = useSenandung((s) => s.userQueue)
   const toggleQueue = useSenandung((s) => s.toggleQueue)
   const playSong = useSenandung((s) => s.playSong)
@@ -97,10 +117,10 @@ export function QueuePanel() {
         )}
 
         {current && (
-          <div style={{ ...label, padding: '18px 8px 10px' }}>{contextLabel ? `Next from: ${contextLabel}` : 'Up next'}</div>
+          <div style={{ ...label, padding: '18px 8px 10px', color: shuffleMode === 'smart' ? ACCENT : '#54585f' }}>{shuffleMode === 'smart' ? `Smart Shuffle${contextLabel ? ` · ${contextLabel}` : ''}` : contextLabel ? `Next from: ${contextLabel}` : 'Up next'}</div>
         )}
         {upcoming.length > 0 ? (
-          <DraggableList songs={upcoming} onPlay={(i) => void playSong(upcoming[i])} onMove={(from, to) => reorderQueue(ci + 1 + from, ci + 1 + to)} onRemove={(i) => removeFromContextQueue(ci + 1 + i)} />
+          <DraggableList songs={upcoming} onPlay={(i) => void playSong(upcoming[i])} onMove={(from, to) => reorderQueue(ci + 1 + from, ci + 1 + to)} onRemove={(i) => removeFromContextQueue(ci + 1 + i)} recIds={shuffleMode === 'smart' ? smartRecIds : undefined} onAddRec={shuffleMode === 'smart' && smartAddTargetId ? (song) => void addSongToPlaylist(smartAddTargetId, song) : undefined} />
         ) : (
           current && userQueue.length === 0 && <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Queue is empty.</div>
         )}

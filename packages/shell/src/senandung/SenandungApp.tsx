@@ -41,6 +41,7 @@ export function SenandungApp() {
   const applyPlayerState = useSenandung((s) => s.applyPlayerState)
   const autoAdvance = useSenandung((s) => s.autoAdvance)
   const handlePlaybackError = useSenandung((s) => s.handlePlaybackError)
+  const setOnline = useSenandung((s) => s.setOnline)
   const setImportProgress = useSenandung((s) => s.setImportProgress)
   const loadLibrary = useSenandung((s) => s.loadLibrary)
   const loadPlaylists = useSenandung((s) => s.loadPlaylists)
@@ -73,12 +74,22 @@ export function SenandungApp() {
     return () => unlisten()
   }, [autoAdvance])
 
-  // Surface playback failures and skip the offending track.
+  // Surface playback failures: stop on connection loss, skip otherwise.
   useEffect(() => {
     let unlisten = () => {}
-    onPlaybackError((e) => handlePlaybackError(e.songId, e.message)).then((fn) => { unlisten = fn })
+    onPlaybackError((e) => handlePlaybackError(e.songId, e.message, e.kind)).then((fn) => { unlisten = fn })
     return () => unlisten()
   }, [handlePlaybackError])
+
+  // Track network status for the offline indicator.
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    setOnline(navigator.onLine)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [setOnline])
 
   // Spotify import progress.
   useEffect(() => {

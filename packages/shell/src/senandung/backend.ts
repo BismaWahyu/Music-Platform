@@ -179,6 +179,12 @@ export async function resolveDuration(videoId: string): Promise<number | null> {
   try { return await invoke<number | null>('resolve_duration', { videoId }) } catch { return null }
 }
 
+/** Smart Shuffle: songs similar to the given seed tracks, excluding `excludeIds`. */
+export async function getRecommendations(seedIds: string[], excludeIds: string[], limit = 30): Promise<BackendSong[]> {
+  if (!inTauri) return []
+  try { return await invoke<BackendSong[]>('get_recommendations', { seedIds, excludeIds, limit }) } catch (e) { console.error('get_recommendations failed', e); return [] }
+}
+
 // ==================== Spotify import ====================
 
 export interface SpotifyImportProgress { done: number; total: number; title: string }
@@ -280,7 +286,7 @@ export async function onSongEnded(cb: () => void): Promise<() => void> {
   }
 }
 
-export interface PlaybackError { songId: string; message: string }
+export interface PlaybackError { songId: string; message: string; kind?: string }
 
 /** Fires when a track fails to download/decode. Returns an unsubscribe fn. */
 export async function onPlaybackError(cb: (e: PlaybackError) => void): Promise<() => void> {

@@ -3,13 +3,13 @@ import { getTrack } from '../data'
 import { ACCENT, coverBigFor, fmt } from '../helpers'
 import { Hover } from '../Hover'
 import { Slider } from '../Slider'
-import { Shuffle, Repeat, RepeatOne, PrevTrack, NextTrack, PauseGlyph, PlayGlyph, Lyrics } from '../Icons'
+import { Shuffle, SmartShuffle, Repeat, RepeatOne, PrevTrack, NextTrack, PauseGlyph, PlayGlyph, Lyrics } from '../Icons'
 
 export function NowPlayingView() {
   const currentId = useSenandung((s) => s.currentId)
   const isPlaying = useSenandung((s) => s.isPlaying)
   const progress = useSenandung((s) => s.progress)
-  const shuffle = useSenandung((s) => s.shuffle)
+  const shuffleMode = useSenandung((s) => s.shuffleMode)
   const repeat = useSenandung((s) => s.repeat)
   const setProgress = useSenandung((s) => s.setProgress)
   const togglePlay = useSenandung((s) => s.togglePlay)
@@ -50,7 +50,7 @@ export function NowPlayingView() {
       </div>
 
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '26px', marginTop: '22px' }}>
-        <div onClick={toggleShuffle} title={shuffle ? 'Shuffle: on' : 'Shuffle'} style={{ cursor: 'pointer', color: shuffle ? ACCENT : '#9398a0' }}><Shuffle size={18} /></div>
+        <div onClick={toggleShuffle} title={shuffleMode === 'smart' ? 'Smart Shuffle: on' : shuffleMode === 'on' ? 'Shuffle: on' : 'Shuffle'} style={{ cursor: 'pointer', color: shuffleMode !== 'off' ? ACCENT : '#9398a0' }}>{shuffleMode === 'smart' ? <SmartShuffle size={18} /> : <Shuffle size={18} />}</div>
         <Hover onClick={prev} title="Previous" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={22} /></Hover>
         <Hover onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'} style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.05)' }}>
           {isPlaying ? <PauseGlyph size={18} /> : <PlayGlyph size={18} />}

@@ -38,6 +38,7 @@ fn main() {
             music_platform::commands::save_mood_covers,
             music_platform::commands::get_radio,
             music_platform::commands::get_charts,
+            music_platform::commands::get_recommendations,
             music_platform::commands::resolve_duration,
             music_platform::commands::import_spotify_playlist,
             music_platform::commands::import_csv_playlist,

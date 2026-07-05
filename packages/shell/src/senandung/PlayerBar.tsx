@@ -3,7 +3,7 @@ import { getTrack } from './data'
 import { ACCENT, stripe, fmt } from './helpers'
 import { Hover } from './Hover'
 import { Slider } from './Slider'
-import { Shuffle, Repeat, RepeatOne, PrevTrack, NextTrack, PauseGlyph, PlayGlyph, Lyrics, QueueList, Volume, VolumeMuted, Minimize, Check, Plus } from './Icons'
+import { Shuffle, SmartShuffle, Repeat, RepeatOne, PrevTrack, NextTrack, PauseGlyph, PlayGlyph, Lyrics, QueueList, Volume, VolumeMuted, Minimize, Check, Plus } from './Icons'
 
 export function PlayerBar() {
   // Granular selectors so the player bar only re-renders on state it actually shows
@@ -12,7 +12,7 @@ export function PlayerBar() {
   const isPlaying = useSenandung((s) => s.isPlaying)
   const progress = useSenandung((s) => s.progress)
   const volume = useSenandung((s) => s.volume)
-  const shuffle = useSenandung((s) => s.shuffle)
+  const shuffleMode = useSenandung((s) => s.shuffleMode)
   const repeat = useSenandung((s) => s.repeat)
   const view = useSenandung((s) => s.view)
   const queueOpen = useSenandung((s) => s.queueOpen)
@@ -58,7 +58,7 @@ export function PlayerBar() {
       {/* Center: transport + progress */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', width: '520px', maxWidth: '46vw' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '22px' }}>
-          <div onClick={toggleShuffle} title={shuffle ? 'Shuffle: on' : 'Shuffle'} style={{ cursor: 'pointer', color: shuffle ? ACCENT : '#9398a0' }}><Shuffle size={16} /></div>
+          <div onClick={toggleShuffle} title={shuffleMode === 'smart' ? 'Smart Shuffle: on' : shuffleMode === 'on' ? 'Shuffle: on' : 'Shuffle'} style={{ cursor: 'pointer', color: shuffleMode !== 'off' ? ACCENT : '#9398a0' }}>{shuffleMode === 'smart' ? <SmartShuffle size={16} /> : <Shuffle size={16} />}</div>
           <Hover onClick={prev} title="Previous" style={{ cursor: 'pointer', color: '#c8cace' }} hover={{ color: '#fff' }}><PrevTrack size={19} /></Hover>
           <Hover onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'} style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#f4f5f6', color: '#0b0c0e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.15s' }} hover={{ transform: 'scale(1.06)' }}>
             {isPlaying ? <PauseGlyph size={14} /> : <PlayGlyph size={14} />}

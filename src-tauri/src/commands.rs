@@ -93,6 +93,21 @@ pub async fn get_charts(region: String) -> Result<Vec<BrowseSection>, String> {
     Ok(client.get_charts(&region).await.unwrap_or_default())
 }
 
+/// Smart Shuffle recommendations: songs similar to a set of seed tracks (a playlist),
+/// excluding what's already in the playlist/queue. Best-effort — empty on failure.
+#[tauri::command]
+pub async fn get_recommendations(
+    seed_ids: Vec<String>,
+    exclude_ids: Vec<String>,
+    limit: usize,
+) -> Result<Vec<Song>, String> {
+    let client = YouTubeClient::new();
+    Ok(client
+        .get_recommendations(&seed_ids, &exclude_ids, limit)
+        .await
+        .unwrap_or_default())
+}
+
 /// Resolve a song's true duration (via the player response) without committing to playing
 /// it, and cache it to the DB so lists can show durations up-front.
 #[tauri::command]
@@ -247,7 +262,8 @@ pub fn play(app: tauri::AppHandle, url: String, song: Song) -> Result<(), String
         let player = get_player();
         if let Err(e) = player.play_url(&url, song) {
             eprintln!("[play] failed: {}", e);
-            let _ = app.emit("playback-error", serde_json::json!({ "songId": song_id, "message": e }));
+            let kind = if e.starts_with("network:") { "network" } else { "playback" };
+            let _ = app.emit("playback-error", serde_json::json!({ "songId": song_id, "message": e, "kind": kind }));
         }
     });
     Ok(())

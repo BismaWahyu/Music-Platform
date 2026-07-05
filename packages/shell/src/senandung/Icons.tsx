@@ -31,6 +31,13 @@ export const PlayTriangle = ({ size = 13 }: { size?: number }) => (
 export const Shuffle = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"></path><path d="M4 20 21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l5 5"></path></svg>
 )
+// Shuffle with a sparkle — Smart Shuffle (shuffle + recommendations).
+export const SmartShuffle = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 4h4v4"></path><path d="M4 20 19 5"></path><path d="M19 16v4h-4"></path><path d="M14 15l5 5"></path><path d="M4 4l4 4"></path>
+    <path d="M5 11.5l.7 1.9 1.9.7-1.9.7L5 16.7l-.7-1.9-1.9-.7 1.9-.7z" fill="currentColor" stroke="none"></path>
+  </svg>
+)
 export const Repeat = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 1l4 4-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="M7 23l-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
 )

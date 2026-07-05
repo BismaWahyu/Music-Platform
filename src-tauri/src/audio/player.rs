@@ -400,7 +400,15 @@ impl AudioPlayer {
             .get(url)
             .header("Range", "bytes=0-")
             .send()
-            .map_err(|e| format!("Failed to download audio: {}", e))?;
+            // Tag connection/timeout failures so the frontend can show "offline" and stop
+            // (rather than skip) — matching Spotify.
+            .map_err(|e| {
+                if e.is_connect() || e.is_timeout() {
+                    format!("network: {}", e)
+                } else {
+                    format!("Failed to download audio: {}", e)
+                }
+            })?;
 
         if !response.status().is_success() {
             return Err(format!("Download returned status: {}", response.status()));

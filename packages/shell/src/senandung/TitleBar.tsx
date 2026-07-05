@@ -62,8 +62,19 @@ function TopSearch() {
   )
 }
 
+// Small amber "Offline" pill shown in the title bar when there's no connection.
+function OfflinePill() {
+  return (
+    <div title="No internet connection" style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '24px', padding: '0 10px', marginRight: '6px', borderRadius: '12px', background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.35)', color: '#f0b45a', fontSize: '11.5px', fontWeight: 600 }}>
+      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f0b45a' }} />
+      Offline
+    </div>
+  )
+}
+
 export function TitleBar() {
   const [maxed, setMaxed] = useState(false)
+  const online = useSenandung((s) => s.online)
 
   // Keep the maximize/restore icon in sync with the actual window state.
   useEffect(() => {
@@ -95,6 +106,7 @@ export function TitleBar() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
+        {!online && <OfflinePill />}
         <Hover style={btn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }} onClick={winMinimize} title="Minimize"><WinMin /></Hover>
         <Hover style={btn} hover={{ background: 'rgba(255,255,255,0.07)', color: '#e8e9ea' }} onClick={winToggleMaximize} title={maxed ? 'Restore' : 'Maximize'}>{maxed ? <WinRestore /> : <WinMax />}</Hover>
         <Hover style={btn} hover={{ background: '#e23b3b', color: '#ffffff' }} onClick={winClose} title="Close"><WinClose /></Hover>

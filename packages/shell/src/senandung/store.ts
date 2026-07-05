@@ -13,7 +13,7 @@ import {
   createPlaylist as beCreatePlaylist, updatePlaylist as beUpdatePlaylist, deletePlaylist as beDeletePlaylist,
   touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist,
   getHome, getAlbum, getArtist, getMoods, getMood, getMoodCover, getMoodCovers, saveMoodCovers, getRadio,
-  getCharts, resolveDuration, importSpotifyPlaylist, importCsvPlaylist,
+  getCharts, resolveDuration, getRecommendations, importSpotifyPlaylist, importCsvPlaylist,
   type BackendPlayerState, type BrowseSection, type BrowsePage, type BrowseItem, type BrowseKind,
   type MoodCategory, type SpotifyImportProgress,
 } from './backend'
@@ -35,6 +35,9 @@ export function moodKey(cat: { browse_id: string; params?: string | null }): str
 // off → no looping; all → loop the queue; one → repeat the current track.
 export type RepeatMode = 'off' | 'all' | 'one'
 
+// off → in order; on → shuffled; smart → shuffled + recommendations woven in (Spotify-style).
+export type ShuffleMode = 'off' | 'on' | 'smart'
+
 interface SenandungState {
   view: View
   detail: DetailRef | null
@@ -50,7 +53,13 @@ interface SenandungState {
   progress: number
   volume: number
   _preMuteVolume: number  // internal: volume to restore when unmuting
-  shuffle: boolean
+  shuffleMode: ShuffleMode
+  smartPool: BackendSong[]              // internal: prefetched Smart Shuffle recommendations
+  smartRecIds: Record<string, true>     // ids in `queue` that are woven-in recommendations
+  smartRejected: Record<string, true>   // recs the user removed — never re-insert this session
+  smartEligible: boolean                // whether the current context supports Smart Shuffle
+  smartKey: string                      // cache key for the current context's rec pool
+  smartAddTargetId: string              // playlist id recs can be added to ('' = none)
   repeat: RepeatMode
   queueOpen: boolean
   miniMode: boolean
@@ -72,6 +81,7 @@ interface SenandungState {
   browseRef: BrowseRef | null
   browsePage: BrowsePage | null
   browseLoading: boolean
+  online: boolean      // network status (drives the offline indicator)
   toast: string | null
   _toastSeq: number    // internal: identifies the latest toast for auto-dismiss
   _failStreak: number  // internal: consecutive playback failures (loop guard)
@@ -107,7 +117,8 @@ interface SenandungState {
   playBrowsePage: () => void
   topUpQueue: (force?: boolean) => Promise<void>
   showToast: (message: string) => void
-  handlePlaybackError: (songId: string, message: string) => void
+  setOnline: (v: boolean) => void
+  handlePlaybackError: (songId: string, message: string, kind?: string) => void
   setImportProgress: (p: SpotifyImportProgress) => void
   importSpotify: (url: string) => Promise<boolean>
   importCsv: (name: string, content: string) => Promise<boolean>
@@ -115,6 +126,8 @@ interface SenandungState {
   togglePlay: () => void
   toggleShuffle: () => void
   setShuffle: (on: boolean) => void
+  setShuffleMode: (mode: ShuffleMode) => void
+  refillSmart: () => Promise<void>
   toggleRepeat: () => void
   toggleQueue: () => void
   toggleMute: () => void
@@ -155,6 +168,61 @@ function buildShuffled(list: BackendSong[], frontId: string): BackendSong[] {
   const front = list.find((x) => x.id === frontId)
   const rest = shuffleInPlace(list.filter((x) => x.id !== frontId))
   return front ? [front, ...rest] : rest
+}
+
+// ---- Smart Shuffle ----
+const SMART_INTERVAL = 3   // baseline: one recommendation after every N context tracks (1:3)
+const SMART_SEEDS = 5      // playlist tracks sampled to seed recommendations
+const SMART_POOL_MIN = 8   // refill the rec pool when it drops below this
+const SMART_LIMIT = 30     // recommendations requested per refill
+const SMART_CONTEXTS: View[] = ['detail', 'liked', 'library']
+
+// Adaptive ratio: weave recommendations more densely into short playlists (so a tiny
+// playlist still feels varied), otherwise keep the 1:3 baseline.
+function smartInterval(size: number): number {
+  return size <= 6 ? 2 : SMART_INTERVAL
+}
+
+// Per-context recommendation cache (session-lived): key → fetched candidate songs, so
+// toggling Smart Shuffle off/on for the same playlist doesn't re-hit the network.
+const smartCache = new Map<string, BackendSong[]>()
+
+// A stable cache key for the current play context.
+function smartKeyOf(s: SenandungState): string {
+  if (s.view === 'detail' && s.detail) return `pl:${s.detail.id}`
+  if (s.view === 'liked') return 'liked'
+  if (s.view === 'library') return 'library'
+  return ''
+}
+
+// Pick up to `n` distinct song ids spread across the list, so recommendations reflect the
+// whole playlist rather than just its first track.
+function sampleSeeds(list: BackendSong[], n: number): string[] {
+  const ids = list.map((s) => s.id).filter(Boolean)
+  if (ids.length <= n) return ids
+  return shuffleInPlace([...ids]).slice(0, n)
+}
+
+// Weave one recommendation from `pool` after every `interval` tracks. Returns the woven
+// list, the set of inserted rec ids, and the unused remainder of the pool.
+function weaveList(items: BackendSong[], pool: BackendSong[], interval: number): {
+  queue: BackendSong[]; recIds: Record<string, true>; poolLeft: BackendSong[]
+} {
+  const queue: BackendSong[] = []
+  const recIds: Record<string, true> = {}
+  let pi = 0
+  let since = 0
+  for (const it of items) {
+    queue.push(it)
+    since++
+    if (since >= interval && pi < pool.length) {
+      const rec = pool[pi++]
+      queue.push(rec)
+      recIds[rec.id] = true
+      since = 0
+    }
+  }
+  return { queue, recIds, poolLeft: pool.slice(pi) }
 }
 
 // Shared driver for playlist imports (Spotify link / CSV): toggles the importing flag,
@@ -270,7 +338,13 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   progress: 0,
   volume: 0.7,
   _preMuteVolume: 0.7,
-  shuffle: false,
+  shuffleMode: 'off',
+  smartPool: [],
+  smartRecIds: {},
+  smartRejected: {},
+  smartEligible: false,
+  smartKey: '',
+  smartAddTargetId: '',
   repeat: 'off',
   queueOpen: false,
   miniMode: false,
@@ -292,6 +366,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   browseRef: null,
   browsePage: null,
   browseLoading: false,
+  online: typeof navigator !== 'undefined' ? navigator.onLine : true,
   toast: null,
   _toastSeq: 0,
   _failStreak: 0,
@@ -365,12 +440,24 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     registerSong(song)
     if (list && list.length) {
       list.forEach(registerSong)
-      const active = get().shuffle ? buildShuffled(list, song.id) : list
-      set({ queueOriginal: list, queue: active, radioPool: [], ctxId: song.id, contextLabel: contextLabelOf(get()) })
+      const mode = get().shuffleMode
+      const eligible = SMART_CONTEXTS.includes(get().view)
+      const active = mode !== 'off' ? buildShuffled(list, song.id) : list
+      set({
+        queueOriginal: list, queue: active, radioPool: [],
+        ctxId: song.id, contextLabel: contextLabelOf(get()),
+        smartEligible: eligible, smartPool: [], smartRecIds: {}, smartRejected: {},
+        smartKey: smartKeyOf(get()),
+        smartAddTargetId: get().view === 'detail' ? (get().detail?.id ?? '') : '',
+      })
+      await get()._playTrack(song)
+      // Smart Shuffle recs are fetched + woven in asynchronously (see refillSmart).
+      if (mode === 'smart' && eligible) void get().refillSmart()
+      return
     } else if (get().queue.some((x) => x.id === song.id)) {
       set({ ctxId: song.id }) // jump within the current context
     } else {
-      set({ queueOriginal: [song], queue: [song], ctxId: song.id, contextLabel: contextLabelOf(get()) })
+      set({ queueOriginal: [song], queue: [song], ctxId: song.id, contextLabel: contextLabelOf(get()), smartEligible: false, smartPool: [], smartRecIds: {}, smartRejected: {}, smartKey: '', smartAddTargetId: '' })
     }
     await get()._playTrack(song)
   },
@@ -596,6 +683,9 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     const seed = s.ctxId || s.currentId
     if (!seed) return
 
+    // Smart Shuffle manages its own queue (playlist tracks + woven recommendations).
+    if (s.shuffleMode === 'smart' && s.smartEligible) { await get().refillSmart(); return }
+
     if (s.repeat === 'all') {
       // Refill the prefetched radio pool when it's low (avoids a network call per advance).
       let pool = s.radioPool
@@ -650,12 +740,23 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     setTimeout(() => { if (get()._toastSeq === seq) set({ toast: null }) }, 4000)
   },
 
-  // A track failed to play (no stream URL, or download/decode error from the backend).
-  // Notify the user and skip to the next track, with a guard so an all-failing queue
-  // doesn't loop forever.
-  handlePlaybackError: (songId, message) => {
+  setOnline: (v) => set({ online: v }),
+
+  // A track failed to play. On a connection failure we STOP (don't skip) and flag offline,
+  // matching Spotify — so a dropped connection doesn't churn through the whole queue. Other
+  // failures (unavailable track, decode error) skip to the next track with a loop guard.
+  handlePlaybackError: (songId, message, kind) => {
     const s = get()
     if (songId !== s.currentId) return // stale error for a track we already moved past
+
+    const offline = kind === 'network' || !s.online || (typeof navigator !== 'undefined' && !navigator.onLine)
+    if (offline) {
+      set({ isPlaying: false, online: false, _failStreak: 0 })
+      s.showToast("You're offline — playback stopped.")
+      console.warn('playback stopped (offline):', message)
+      return
+    }
+
     const title = getTrack(songId).title || 'This song'
     const streak = s._failStreak + 1
     const cap = Math.min(Math.max(s.queue.length, 1), 6)
@@ -683,8 +784,9 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       isPlaying: s.is_playing,
       progress: Math.floor((s.position_ms ?? 0) / 1000),
       volume: s.volume,
-      // A track that's actually producing audio clears the failure streak.
-      ...(s.is_playing && (s.position_ms ?? 0) > 500 ? { _failStreak: 0 } : {}),
+      // A track that's actually producing audio clears the failure streak and confirms we're
+      // back online.
+      ...(s.is_playing && (s.position_ms ?? 0) > 500 ? { _failStreak: 0, online: true } : {}),
     })
   },
 
@@ -693,15 +795,90 @@ export const useSenandung = create<SenandungState>((set, get) => ({
     set((s) => ({ isPlaying: !s.isPlaying }))
     if (get().realMode) void bePlayPause()
   },
-  toggleShuffle: () => get().setShuffle(!get().shuffle),
-  // Reorder the queue in place: shuffle the upcoming tracks (current stays at the front),
-  // or restore the original order — matching Spotify's shuffle toggle.
-  setShuffle: (on) => set((s) => {
-    if (on === s.shuffle) return {}
-    if (!s.queue.length) return { shuffle: on }
-    if (on) return { shuffle: true, queue: buildShuffled(s.queue, s.ctxId) }
-    return { shuffle: false, queue: s.queueOriginal.length ? s.queueOriginal : s.queue }
-  }),
+  // Cycle Off → Shuffle → Smart Shuffle → Off (Smart is skipped when the context can't
+  // support it, e.g. search results / radio).
+  toggleShuffle: () => {
+    const s = get()
+    const canSmart = s.smartEligible && s.queueOriginal.length > 0
+    const next: ShuffleMode = s.shuffleMode === 'off' ? 'on' : s.shuffleMode === 'on' ? (canSmart ? 'smart' : 'off') : 'off'
+    get().setShuffleMode(next)
+  },
+  // The plain shuffle button (e.g. a playlist's "Shuffle") maps onto the shuffle mode.
+  setShuffle: (on) => get().setShuffleMode(on ? 'on' : 'off'),
+
+  setShuffleMode: (mode) => {
+    const s = get()
+    if (mode === s.shuffleMode) return
+    const base = s.queueOriginal.length ? s.queueOriginal : s.queue
+    if (mode === 'off') {
+      // Restore the original order (drops woven recommendations).
+      set({ shuffleMode: 'off', smartRecIds: {}, smartPool: [], queue: base })
+      return
+    }
+    if (mode === 'on') {
+      set({ shuffleMode: 'on', smartRecIds: {}, smartPool: [], queue: s.queue.length ? buildShuffled(base, s.ctxId) : s.queue })
+      return
+    }
+    // smart — fall back to plain shuffle if the context isn't eligible.
+    if (!s.smartEligible) { get().setShuffleMode('on'); return }
+    set({ shuffleMode: 'smart', smartRecIds: {}, smartPool: [], queue: s.queue.length ? buildShuffled(base, s.ctxId) : s.queue })
+    void get().refillSmart()
+  },
+
+  // Fetch recommendations for the current playlist and weave them into the upcoming queue.
+  // Refills the pool when low, and weaves once (keeping the current + already-played tracks
+  // intact). Guards against the mode being turned off mid-fetch.
+  refillSmart: async () => {
+    if (!inTauri) return
+    let s = get()
+    if (s.shuffleMode !== 'smart' || !s.smartEligible) return
+
+    if (s.smartPool.length < SMART_POOL_MIN) {
+      const key = s.smartKey
+      let candidates = smartCache.get(key) ?? []
+      // Fetch (once per context, then cached) only if the cache is thin.
+      if (candidates.length < SMART_POOL_MIN) {
+        const seeds = sampleSeeds(s.queueOriginal, SMART_SEEDS)
+        if (seeds.length) {
+          const exclude = s.queueOriginal.map((x) => x.id) // exclude the playlist itself
+          const fetched = await getRecommendations(seeds, exclude, SMART_LIMIT)
+          if (get().shuffleMode !== 'smart') return // toggled off while fetching
+          fetched.forEach(registerSong)
+          const seen = new Set(candidates.map((x) => x.id))
+          candidates = [...candidates, ...fetched.filter((f) => !seen.has(f.id))]
+          if (key) smartCache.set(key, candidates)
+        }
+      }
+      // Feed the pool from candidates, skipping anything queued / already a rec / rejected.
+      s = get()
+      const blocked = new Set([
+        ...s.queue.map((x) => x.id),
+        ...Object.keys(s.smartRecIds),
+        ...Object.keys(s.smartRejected),
+        ...s.smartPool.map((x) => x.id),
+      ])
+      const fresh = candidates.filter((c) => !blocked.has(c.id))
+      if (fresh.length) set((st) => ({ smartPool: [...st.smartPool, ...fresh] }))
+    }
+
+    // Continuously weave recs into the trailing, not-yet-woven playlist tracks (the part
+    // after the last existing rec). This keeps the immediate upcoming order stable while
+    // extending recs deeper as the pool refills — no re-shuffling of what's already woven.
+    s = get()
+    if (s.smartPool.length > 0 && s.queue.length > 1) {
+      const interval = smartInterval(s.queueOriginal.length)
+      const ci = Math.max(0, s.queue.findIndex((x) => x.id === s.ctxId))
+      let lastRec = -1
+      for (let i = 0; i < s.queue.length; i++) if (s.smartRecIds[s.queue[i].id]) lastRec = i
+      const start = Math.max(lastRec + 1, ci + 1) // never touch played/current or woven upcoming
+      const tail = s.queue.slice(start)
+      // Only worth weaving once there's at least a full interval of bare playlist tracks.
+      if (tail.filter((t) => !s.smartRecIds[t.id]).length >= interval) {
+        const { queue: woven, recIds, poolLeft } = weaveList(tail, s.smartPool, interval)
+        set({ queue: [...s.queue.slice(0, start), ...woven], smartRecIds: { ...s.smartRecIds, ...recIds }, smartPool: poolLeft })
+      }
+    }
+  },
   toggleRepeat: () => set((s) => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
   toggleQueue: () => set((s) => ({ queueOpen: !s.queueOpen })),
 
@@ -768,10 +945,17 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   }),
 
   // Remove a song from the context queue (absolute index). Never removes the anchor track.
+  // A removed Smart Shuffle recommendation is remembered so it isn't re-inserted, and does
+  // NOT alter queueOriginal (recs aren't part of the playlist).
   removeFromContextQueue: (index) => set((s) => {
     if (index < 0 || index >= s.queue.length || s.queue[index].id === s.ctxId) return {}
+    const removed = s.queue[index]
     const q = [...s.queue]
     q.splice(index, 1)
+    if (s.smartRecIds[removed.id]) {
+      const recIds = { ...s.smartRecIds }; delete recIds[removed.id]
+      return { queue: q, smartRecIds: recIds, smartRejected: { ...s.smartRejected, [removed.id]: true } }
+    }
     return { queue: q, queueOriginal: q }
   }),
 
