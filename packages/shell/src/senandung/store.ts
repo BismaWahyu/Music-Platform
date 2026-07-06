@@ -209,27 +209,6 @@ function sampleSeeds(list: BackendSong[], n: number): string[] {
   return shuffleInPlace([...ids]).slice(0, n)
 }
 
-// Weave one recommendation from `pool` after every `interval` tracks. Returns the woven
-// list, the set of inserted rec ids, and the unused remainder of the pool.
-function weaveList(items: BackendSong[], pool: BackendSong[], interval: number): {
-  queue: BackendSong[]; recIds: Record<string, true>; poolLeft: BackendSong[]
-} {
-  const queue: BackendSong[] = []
-  const recIds: Record<string, true> = {}
-  let pi = 0
-  let since = 0
-  for (const it of items) {
-    queue.push(it)
-    since++
-    if (since >= interval && pi < pool.length) {
-      const rec = pool[pi++]
-      queue.push(rec)
-      recIds[rec.id] = true
-      since = 0
-    }
-  }
-  return { queue, recIds, poolLeft: pool.slice(pi) }
-}
 
 // Shared driver for playlist imports (Spotify link / CSV): toggles the importing flag,
 // runs the import, refreshes playlists, and opens the result. Progress arrives via the
@@ -934,21 +913,39 @@ export const useSenandung = create<SenandungState>((set, get) => ({
       if (fresh.length) set((st) => ({ smartPool: [...st.smartPool, ...fresh] }))
     }
 
-    // Continuously weave recs into the trailing, not-yet-woven playlist tracks (the part
-    // after the last existing rec). This keeps the immediate upcoming order stable while
-    // extending recs deeper as the pool refills — no re-shuffling of what's already woven.
+    // Weave recs between the trailing (not-yet-woven) playlist tracks AND append recs so the
+    // upcoming queue stays populated — even for a 1-song playlist, where there's nothing to
+    // weave between and we simply append recommendations. Already-woven upcoming stays
+    // stable; growth is bounded by trimming old played tracks.
     s = get()
-    if (s.smartPool.length > 0 && s.queue.length > 1) {
+    if (s.smartPool.length > 0 && s.queue.length > 0) {
       const interval = smartInterval(s.queueOriginal.length)
+      const TARGET_UPCOMING = 20
+      const KEEP_BEHIND = 5
       const ci = Math.max(0, s.queue.findIndex((x) => x.id === s.ctxId))
       let lastRec = -1
       for (let i = 0; i < s.queue.length; i++) if (s.smartRecIds[s.queue[i].id]) lastRec = i
       const start = Math.max(lastRec + 1, ci + 1) // never touch played/current or woven upcoming
-      const tail = s.queue.slice(start)
-      // Only worth weaving once there's at least a full interval of bare playlist tracks.
-      if (tail.filter((t) => !s.smartRecIds[t.id]).length >= interval) {
-        const { queue: woven, recIds, poolLeft } = weaveList(tail, s.smartPool, interval)
-        set({ queue: [...s.queue.slice(0, start), ...woven], smartRecIds: { ...s.smartRecIds, ...recIds }, smartPool: poolLeft })
+      const head = s.queue.slice(0, start)
+      const tail = s.queue.slice(start)            // bare playlist tracks not yet followed by recs
+      const recIds: Record<string, true> = { ...s.smartRecIds }
+      const pool = [...s.smartPool]
+      const woven: BackendSong[] = []
+      let since = 0
+      for (const track of tail) {
+        woven.push(track)
+        since++
+        if (since >= interval && pool.length) { const r = pool.shift()!; woven.push(r); recIds[r.id] = true; since = 0 }
+      }
+      // Top up with recommendations until the upcoming queue reaches the target length.
+      while (head.length + woven.length - 1 - ci < TARGET_UPCOMING && pool.length) {
+        const r = pool.shift()!; woven.push(r); recIds[r.id] = true
+      }
+      if (pool.length !== s.smartPool.length) { // consumed recs → rebuild + trim old played
+        let nq = [...head, ...woven]
+        const nci = nq.findIndex((x) => x.id === s.ctxId)
+        if (nci > KEEP_BEHIND) nq = nq.slice(nci - KEEP_BEHIND)
+        set({ queue: nq, smartRecIds: recIds, smartPool: pool })
       }
     }
   },

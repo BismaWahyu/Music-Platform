@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use crate::{Song, PlayerState};
@@ -385,41 +385,81 @@ impl AudioPlayer {
     }
 
     fn download_audio(&self, url: &str, path: &std::path::Path) -> Result<(), String> {
-        // googlevideo wants a matching client User-Agent and behaves more reliably
-        // with an explicit Range request; stream the body to disk instead of
-        // buffering it all (which can fail with "incomplete message" on large files).
+        // googlevideo throttles/resets a single full-file download (which shows up as a
+        // "request or response body error" mid-transfer). Download in ranged chunks with a
+        // few retries instead — the same approach yt-dlp/NewPipe use — which is far more
+        // reliable. Errors are tagged "network:" so the frontend can stop-and-show-offline.
+        use std::io::Write;
         const UA: &str = "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1; Cronet/132.0.6808.3)";
+        const CHUNK: u64 = 4 * 1024 * 1024; // 4 MiB per request
 
         let client = reqwest::blocking::Client::builder()
             .user_agent(UA)
-            .timeout(Duration::from_secs(90))
+            .timeout(Duration::from_secs(60))
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-        let mut response = client
-            .get(url)
-            .header("Range", "bytes=0-")
-            .send()
-            // Tag connection/timeout failures so the frontend can show "offline" and stop
-            // (rather than skip) — matching Spotify.
-            .map_err(|e| {
-                if e.is_connect() || e.is_timeout() {
-                    format!("network: {}", e)
-                } else {
-                    format!("Failed to download audio: {}", e)
-                }
-            })?;
-
-        if !response.status().is_success() {
-            return Err(format!("Download returned status: {}", response.status()));
-        }
+        let classify = |e: &reqwest::Error| -> String {
+            if e.is_connect() || e.is_timeout() {
+                format!("network: {}", e)
+            } else {
+                format!("Failed to download audio: {}", e)
+            }
+        };
 
         let mut file = std::fs::File::create(path)
             .map_err(|e| format!("Failed to create temp file: {}", e))?;
 
-        std::io::copy(&mut response, &mut file)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        let mut start: u64 = 0;
+        loop {
+            let range = format!("bytes={}-{}", start, start + CHUNK - 1);
+            // Fetch one chunk, retrying transient failures a few times.
+            let mut chunk: Option<Vec<u8>> = None;
+            for attempt in 1..=3u32 {
+                match client.get(url).header("Range", &range).send() {
+                    Ok(resp) => {
+                        let status = resp.status();
+                        // 416 = we've requested past the end → the file is fully downloaded.
+                        if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+                            chunk = Some(Vec::new());
+                            break;
+                        }
+                        if !status.is_success() {
+                            if attempt >= 3 {
+                                return Err(format!("Download returned status: {}", status));
+                            }
+                            std::thread::sleep(Duration::from_millis(300 * attempt as u64));
+                            continue;
+                        }
+                        match resp.bytes() {
+                            Ok(b) => { chunk = Some(b.to_vec()); break; }
+                            Err(e) => {
+                                if attempt >= 3 { return Err(classify(&e)); }
+                                std::thread::sleep(Duration::from_millis(300 * attempt as u64));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if attempt >= 3 { return Err(classify(&e)); }
+                        std::thread::sleep(Duration::from_millis(300 * attempt as u64));
+                    }
+                }
+            }
+            let chunk = chunk.ok_or_else(|| "Failed to download audio".to_string())?;
+            if chunk.is_empty() {
+                break; // reached the end
+            }
+            file.write_all(&chunk).map_err(|e| format!("Failed to write file: {}", e))?;
+            let n = chunk.len() as u64;
+            start += n;
+            if n < CHUNK {
+                break; // last (partial) chunk
+            }
+        }
 
+        if start == 0 {
+            return Err("Downloaded zero bytes".to_string());
+        }
         Ok(())
     }
 
@@ -530,13 +570,22 @@ impl AudioPlayer {
 
 // ==================== Audio Engine Singleton ====================
 
-static mut AUDIO_PLAYER: Option<AudioPlayer> = None;
+// The player owns rodio's OutputStream, which is `!Send`/`!Sync` — that's why it was a
+// `static mut` before. But `static mut` accessed from multiple threads (the command threads
+// + the event emitter) with no synchronization is undefined behaviour: under release LTO the
+// reader threads could observe it as never-initialised, so playback failed only in release
+// builds. Wrapping it in a `OnceLock` gives correct init/read ordering. The stream is only
+// created once and never dropped (it lives for the process), so asserting Send+Sync is sound.
+struct PlayerCell(AudioPlayer);
+unsafe impl Send for PlayerCell {}
+unsafe impl Sync for PlayerCell {}
+
+static AUDIO_PLAYER: OnceLock<PlayerCell> = OnceLock::new();
 
 pub fn init_audio_engine(_app_handle: AppHandle) {
     cleanup_temp_audio(); // remove any `song_*.m4a` left behind by a previous crash
-    unsafe {
-        AUDIO_PLAYER = Some(AudioPlayer::new().expect("Failed to initialize audio player"));
-    }
+    let player = AudioPlayer::new().expect("Failed to initialize audio player");
+    let _ = AUDIO_PLAYER.set(PlayerCell(player));
 }
 
 /// Delete stray temp audio files from earlier sessions. Files still open by another running
@@ -554,9 +603,7 @@ fn cleanup_temp_audio() {
 }
 
 pub fn get_player() -> &'static AudioPlayer {
-    unsafe {
-        AUDIO_PLAYER.as_ref().expect("Audio player not initialized")
-    }
+    &AUDIO_PLAYER.get().expect("Audio player not initialized").0
 }
 
 // ==================== Background Thread for Events ====================
@@ -566,7 +613,8 @@ pub fn start_event_emitter(app_handle: AppHandle) {
         loop {
             std::thread::sleep(Duration::from_millis(500));
 
-            if let Some(player) = unsafe { AUDIO_PLAYER.as_ref() } {
+            if let Some(cell) = AUDIO_PLAYER.get() {
+                let player = &cell.0;
                 let state = player.get_player_state();
 
                 // Emit player state update
