@@ -299,6 +299,13 @@ impl Database {
         Ok(())
     }
 
+    pub fn playlist_contains(&self, playlist_id: &str, song_id: &str) -> SqliteResult<bool> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT 1 FROM playlist_songs WHERE playlist_id = ?1 AND song_id = ?2 LIMIT 1")?;
+        stmt.exists([playlist_id, song_id])
+    }
+
     pub fn remove_song_from_playlist(&self, playlist_id: &str, song_id: &str) -> SqliteResult<bool> {
         let result = self.conn.execute(
             "DELETE FROM playlist_songs WHERE playlist_id = ?1 AND song_id = ?2",

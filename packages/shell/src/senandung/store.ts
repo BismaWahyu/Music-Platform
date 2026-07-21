@@ -9,7 +9,7 @@ import type { BackendSong, BackendPlaylist } from './data'
 import {
   inTauri, searchSongs, getStreamUrl, playSong as bePlay, togglePlayback as bePlayPause,
   setVolume as beSetVolume, seek as beSeek, addToHistory, getHistorySongs, getLibrary, getPlaylists,
-  addToLibrary, removeFromLibrary, addToPlaylist as beAddToPlaylist, removeFromPlaylist as beRemoveFromPlaylist,
+  addToLibrary, removeFromLibrary, addToPlaylist as beAddToPlaylist, playlistContains as bePlaylistContains, removeFromPlaylist as beRemoveFromPlaylist,
   createPlaylist as beCreatePlaylist, updatePlaylist as beUpdatePlaylist, deletePlaylist as beDeletePlaylist,
   touchPlaylist as beTouchPlaylist, getPlaylist as beGetPlaylist, setPlaylistCover as beSetPlaylistCover,
   saveSession as beSaveSession, getSession as beGetSession,
@@ -90,6 +90,7 @@ interface SenandungState {
   _failStreak: number  // internal: consecutive playback failures (loop guard)
   importing: boolean
   importProgress: SpotifyImportProgress | null
+  dupConfirm: { playlistId: string; song: BackendSong; playlistName: string } | null
 
   // actions
   setView: (view: View) => void
@@ -150,6 +151,8 @@ interface SenandungState {
   reorderUserQueue: (from: number, to: number) => void
   _playTrack: (song: BackendSong) => Promise<void>
   addSongToPlaylist: (playlistId: string, song: BackendSong) => Promise<void>
+  confirmDupAdd: () => Promise<void>
+  cancelDupAdd: () => void
   removeSongFromPlaylist: (playlistId: string, songId: string) => Promise<void>
   createPlaylist: (name: string) => Promise<void>
   createPlaylistAndAdd: (name: string, song: BackendSong) => Promise<void>
@@ -363,6 +366,7 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   _failStreak: 0,
   importing: false,
   importProgress: null,
+  dupConfirm: null,
 
   setView: (view) => set({ view }),
   goHome: () => set({ view: 'home', detail: null }),
@@ -1056,10 +1060,25 @@ export const useSenandung = create<SenandungState>((set, get) => ({
   }),
 
   addSongToPlaylist: async (playlistId, song) => {
+    // Already in the playlist → ask before re-adding (see dupConfirm / confirmDupAdd).
+    if (await bePlaylistContains(playlistId, song.id)) {
+      const name = get().playlists.find((p) => p.id === playlistId)?.name ?? 'this playlist'
+      set({ dupConfirm: { playlistId, song, playlistName: name } })
+      return
+    }
     await beAddToPlaylist(playlistId, song)
     void get().loadPlaylists()
     if (get().detail?.id === playlistId) void get().reloadDetailPlaylist()
   },
+  confirmDupAdd: async () => {
+    const d = get().dupConfirm
+    set({ dupConfirm: null })
+    if (!d) return
+    await beAddToPlaylist(d.playlistId, d.song)
+    void get().loadPlaylists()
+    if (get().detail?.id === d.playlistId) void get().reloadDetailPlaylist()
+  },
+  cancelDupAdd: () => set({ dupConfirm: null }),
 
   removeSongFromPlaylist: async (playlistId, songId) => {
     await beRemoveFromPlaylist(playlistId, songId)

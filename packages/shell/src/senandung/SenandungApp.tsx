@@ -7,6 +7,7 @@ import { Sidebar } from './Sidebar'
 import { QueuePanel } from './QueuePanel'
 import { PlayerBar } from './PlayerBar'
 import { MiniPlayer } from './MiniPlayer'
+import { ConfirmPopover } from './ConfirmPopover'
 import { HomeView } from './views/HomeView'
 import { LibraryView } from './views/LibraryView'
 import { LikedView } from './views/LikedView'
@@ -38,6 +39,9 @@ function CurrentView() {
 export function SenandungApp() {
   const miniMode = useSenandung((s) => s.miniMode)
   const queueOpen = useSenandung((s) => s.queueOpen)
+  const dupConfirm = useSenandung((s) => s.dupConfirm)
+  const confirmDupAdd = useSenandung((s) => s.confirmDupAdd)
+  const cancelDupAdd = useSenandung((s) => s.cancelDupAdd)
   const applyPlayerState = useSenandung((s) => s.applyPlayerState)
   const autoAdvance = useSenandung((s) => s.autoAdvance)
   const handlePlaybackError = useSenandung((s) => s.handlePlaybackError)
@@ -134,6 +138,16 @@ export function SenandungApp() {
       </div>
       <PlayerBar />
       <Toast />
+      {dupConfirm && (
+        <ConfirmPopover
+          anchor={{ x: window.innerWidth / 2 - 122, y: window.innerHeight / 2 - 70 }}
+          title="Already in playlist"
+          message={`"${dupConfirm.song.title}" is already in "${dupConfirm.playlistName}". Add it again?`}
+          confirmLabel="Add anyway"
+          onConfirm={() => void confirmDupAdd()}
+          onClose={cancelDupAdd}
+        />
+      )}
     </div>
   )
 }

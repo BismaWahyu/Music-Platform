@@ -83,63 +83,74 @@ unsafe extern "system" fn subclass_proc(
     _id: usize,
     _data: usize,
 ) -> LRESULT {
-    if Some(msg) == WM_TBC.get().copied() {
-        ensure_buttons(hwnd);
-    } else if msg == WM_COMMAND && ((wparam.0 >> 16) & 0xffff) as u32 == THBN_CLICKED {
-        let action = match (wparam.0 & 0xffff) as u32 {
-            ID_PREV => "prev",
-            ID_PLAY => "playpause",
-            ID_NEXT => "next",
-            _ => "",
-        };
-        if !action.is_empty() {
-            if let Some(app) = APP.get() {
-                let _ = app.emit("media-control", action);
+    // A panic must never unwind across this `extern "system"` boundary (that aborts the
+    // whole process). Catch it and fall through to default handling instead.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if Some(msg) == WM_TBC.get().copied() {
+            ensure_buttons(hwnd);
+        } else if msg == WM_COMMAND && ((wparam.0 >> 16) & 0xffff) as u32 == THBN_CLICKED {
+            let action = match (wparam.0 & 0xffff) as u32 {
+                ID_PREV => "prev",
+                ID_PLAY => "playpause",
+                ID_NEXT => "next",
+                _ => "",
+            };
+            if !action.is_empty() {
+                if let Some(app) = APP.get() {
+                    let _ = app.emit("media-control", action);
+                }
+                return Some(LRESULT(0));
             }
-            return LRESULT(0);
+        } else if msg == WM_UPDATE {
+            update_playing(hwnd, wparam.0 != 0);
+            return Some(LRESULT(0));
         }
-    } else if msg == WM_UPDATE {
-        update_playing(hwnd, wparam.0 != 0);
+        None
+    }));
+    match result {
+        Ok(Some(lr)) => lr,
+        _ => DefSubclassProc(hwnd, msg, wparam, lparam),
     }
-    DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
 unsafe fn ensure_buttons(hwnd: HWND) {
-    STATE.with(|cell| {
-        let mut slot = cell.borrow_mut();
-        if slot.is_none() {
-            let list: ITaskbarList3 =
-                match CoCreateInstance(&TaskbarList, None, CLSCTX_INPROC_SERVER) {
-                    Ok(l) => l,
-                    Err(_) => return,
-                };
-            if list.HrInit().is_err() {
-                return;
-            }
-            let icons = [
-                load_icon(ICO_PREV),
-                load_icon(ICO_PLAY),
-                load_icon(ICO_PAUSE),
-                load_icon(ICO_NEXT),
-            ];
-            *slot = Some(State { list, icons, playing: false });
+    // Create the COM object + icons OUTSIDE any RefCell borrow: STA COM calls pump messages,
+    // which can re-enter this window proc — holding the borrow across them would double-borrow
+    // and panic.
+    let initialised = STATE.with(|c| c.borrow().is_some());
+    if !initialised {
+        let list: ITaskbarList3 = match CoCreateInstance(&TaskbarList, None, CLSCTX_INPROC_SERVER) {
+            Ok(l) => l,
+            Err(_) => return,
+        };
+        if list.HrInit().is_err() {
+            return;
         }
-        if let Some(state) = slot.as_ref() {
-            let buttons = build_buttons(state);
-            let _ = state.list.ThumbBarAddButtons(hwnd, &buttons);
-        }
-    });
+        let icons = [
+            load_icon(ICO_PREV),
+            load_icon(ICO_PLAY),
+            load_icon(ICO_PAUSE),
+            load_icon(ICO_NEXT),
+        ];
+        STATE.with(|c| *c.borrow_mut() = Some(State { list, icons, playing: false }));
+    }
+    // Snapshot the list + buttons from a brief borrow, then call COM with the borrow released.
+    let data = STATE.with(|c| c.borrow().as_ref().map(|s| (s.list.clone(), build_buttons(s))));
+    if let Some((list, buttons)) = data {
+        let _ = list.ThumbBarAddButtons(hwnd, &buttons);
+    }
 }
 
 unsafe fn update_playing(hwnd: HWND, playing: bool) {
-    STATE.with(|cell| {
-        let mut slot = cell.borrow_mut();
-        if let Some(state) = slot.as_mut() {
-            state.playing = playing;
-            let buttons = build_buttons(state);
-            let _ = state.list.ThumbBarUpdateButtons(hwnd, &buttons);
-        }
+    let data = STATE.with(|c| {
+        c.borrow_mut().as_mut().map(|s| {
+            s.playing = playing;
+            (s.list.clone(), build_buttons(s))
+        })
     });
+    if let Some((list, buttons)) = data {
+        let _ = list.ThumbBarUpdateButtons(hwnd, &buttons);
+    }
 }
 
 fn build_buttons(state: &State) -> [THUMBBUTTON; 3] {

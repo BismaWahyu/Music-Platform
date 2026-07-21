@@ -6,7 +6,10 @@ import { ACCENT } from './helpers'
 import { Hover } from './Hover'
 import { SongThumb } from './SongThumb'
 import { SongRow } from './SongRow'
+import { useSongMenu } from './SongActionMenu'
 import { WinClose, Plus } from './Icons'
+
+const EMPTY_SONG = { id: '', title: '', artists: [], album: null, duration: null, thumbnail: null } as BackendSong
 
 const label = {
   fontSize: '10.5px', letterSpacing: '0.12em', textTransform: 'uppercase' as const,
@@ -82,6 +85,7 @@ export function QueuePanel() {
   const ci = queue.findIndex((x) => x.id === ctxId)
   const upcoming = ci >= 0 ? queue.slice(ci + 1) : []
   const cur = getTrack(currentId)
+  const nowMenu = useSongMenu(current ?? EMPTY_SONG)
 
   return (
     <div style={{ width: '320px', flex: 'none', background: 'rgba(18,20,26,0.42)', backdropFilter: 'blur(44px) saturate(185%)', WebkitBackdropFilter: 'blur(44px) saturate(185%)', borderLeft: '1px solid rgba(255,255,255,0.09)', display: 'flex', flexDirection: 'column' }}>
@@ -94,13 +98,14 @@ export function QueuePanel() {
         {current ? (
           <>
             <div style={{ ...label, padding: '0 8px 10px' }}>Now Playing</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '9px', background: 'rgba(255,255,255,0.03)' }}>
+            <div onContextMenu={nowMenu.onContextMenu} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', borderRadius: '9px', background: 'rgba(255,255,255,0.03)' }}>
               <SongThumb hue={cur.hue} thumbnail={cur.thumbnail} size={40} current playing={isPlaying} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '13.5px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: ACCENT }}>{cur.title}</div>
                 <div style={{ fontSize: '12px', color: '#9398a0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>{cur.artist}</div>
               </div>
             </div>
+            {nowMenu.menu}
           </>
         ) : (
           <div style={{ padding: '16px 8px', fontSize: '13px', color: '#54585f' }}>Nothing playing.</div>

@@ -20,10 +20,13 @@ edition = "2021"
 
 # Optimised release build for the beta installer: smaller binary + faster runtime.
 # (Unwinding is kept — Tauri turns a panicking command into an error instead of aborting.)
+# NOTE: `lto = "thin"` (not fat) + a few codegen units on purpose — fat LTO is the most
+# aggressive setting and can surface latent UB as hard crashes; thin is safer and still
+# shrinks the binary well.
 [profile.release]
 opt-level = 3       # keep max speed (matters for audio decode)
-lto = true          # link-time optimisation across crates
-codegen-units = 1   # better optimisation at the cost of compile time
+lto = "thin"        # link-time optimisation (thin = safer than fat)
+codegen-units = 16
 strip = true        # drop debug symbols → much smaller binary
 panic = "unwind"
 

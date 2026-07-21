@@ -358,6 +358,13 @@ pub fn add_to_playlist(playlist_id: String, song: Song) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn playlist_contains(playlist_id: String, song_id: String) -> Result<bool, String> {
+    let db_guard = get_db().lock().unwrap();
+    let db = db_guard.as_ref().ok_or("Database not initialized")?;
+    db.playlist_contains(&playlist_id, &song_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn remove_from_playlist(playlist_id: String, song_id: String) -> Result<(), String> {
     let db_guard = get_db().lock().unwrap();
     let db = db_guard.as_ref().ok_or("Database not initialized")?;

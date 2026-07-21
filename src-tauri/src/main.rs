@@ -21,6 +21,19 @@ fn round_window_corners(window: &tauri::WebviewWindow) {
 }
 
 fn main() {
+    // Release builds have no console, so panics are invisible. Log them to a file so we can
+    // see what force-closes the app. ponytail: temporary crash-diagnostic, remove once fixed.
+    std::panic::set_hook(Box::new(|info| {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(std::env::temp_dir().join("swaytune-crash.log"))
+        {
+            let _ = writeln!(f, "{info}");
+        }
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -64,6 +77,7 @@ fn main() {
             music_platform::commands::get_playlists,
             music_platform::commands::get_playlist,
             music_platform::commands::add_to_playlist,
+            music_platform::commands::playlist_contains,
             music_platform::commands::remove_from_playlist,
             music_platform::commands::update_playlist,
             music_platform::commands::delete_playlist,
@@ -94,12 +108,15 @@ fn main() {
                 }
             }
 
-            // Initialize audio player, then start the player-state event emitter.
+            // Init the audio player synchronously (before the event loop starts) so it's
+            // ready before the frontend can invoke any command — otherwise an early command
+            // (e.g. restoring volume on session resume) hits get_player() before init and
+            // aborts. Then spawn the player-state event emitter.
             #[cfg(desktop)]
             {
                 let app_handle = app.handle().clone();
+                music_platform::audio::player::init_audio_engine(app_handle.clone());
                 std::thread::spawn(move || {
-                    music_platform::audio::player::init_audio_engine(app_handle.clone());
                     music_platform::audio::player::start_event_emitter(app_handle);
                 });
             }

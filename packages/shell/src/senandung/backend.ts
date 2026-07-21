@@ -240,6 +240,11 @@ export async function addToPlaylist(playlistId: string, song: BackendSong): Prom
   if (inTauri) { try { await invoke('add_to_playlist', { playlistId, song }) } catch (e) { console.error(e) } }
 }
 
+export async function playlistContains(playlistId: string, songId: string): Promise<boolean> {
+  if (!inTauri) return false
+  try { return await invoke<boolean>('playlist_contains', { playlistId, songId }) } catch { return false }
+}
+
 export async function removeFromPlaylist(playlistId: string, songId: string): Promise<void> {
   if (inTauri) { try { await invoke('remove_from_playlist', { playlistId, songId }) } catch (e) { console.error(e) } }
 }
